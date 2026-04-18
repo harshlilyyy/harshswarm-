@@ -52,19 +52,26 @@ st.markdown("""
         color: var(--text-primary);
         transition: background 0.3s ease, color 0.3s ease;
     }
-    .main .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 1400px; }
+    .main .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 1200px; }
     h1 {
         background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
         background-size: 200% 200%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
-        font-size: 3.2rem !important;
+        font-size: 3.5rem !important;
         letter-spacing: -0.02em;
         margin-bottom: 0.25rem !important;
         animation: gradientShift 8s ease infinite;
+        text-align: center;
     }
     @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .hero-subtitle {
+        text-align: center;
+        font-size: 1.2rem;
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+    }
     [data-testid="stSidebar"] { background: var(--sidebar-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-right: 1px solid var(--card-border); }
     [data-testid="stChatMessage"] {
         background: var(--card-bg); backdrop-filter: blur(12px); border-radius: 24px; padding: 1.25rem 1.75rem;
@@ -74,15 +81,15 @@ st.markdown("""
     [data-testid="stChatMessage"]:hover { transform: translateY(-6px) scale(1.01); box-shadow: var(--shadow-lg); }
     .stButton > button {
         background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 100%);
-        color: white; font-weight: 700; font-size: 1.1rem; padding: 0.9rem 2rem; border-radius: 60px; border: none;
+        color: white; font-weight: 700; font-size: 1.2rem; padding: 1rem 2.5rem; border-radius: 60px; border: none;
         box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); transition: all 0.3s ease; letter-spacing: 0.3px;
         border: 1px solid rgba(255, 255, 255, 0.1); animation: pulseGlow 2s infinite;
     }
     @keyframes pulseGlow { 0% { box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); } 50% { box-shadow: 0 12px 28px rgba(139, 92, 246, 0.4); } 100% { box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); } }
     .stButton > button:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 18px 35px rgba(139, 92, 246, 0.5); background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); animation: none; }
     .verdict-box { background: var(--card-bg); backdrop-filter: blur(12px); border-radius: 28px; padding: 2rem 2.5rem; margin: 2rem 0; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: var(--shadow-sm); }
-    .evolution-box { background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(34, 197, 94, 0.02) 100%); border-radius: 20px; padding: 1.5rem 2rem; margin: 1.5rem 0; border: 1px solid rgba(34, 197, 94, 0.3); }
     hr { margin: 2rem 0; border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--card-border), transparent); }
+    .centered-input { max-width: 800px; margin: 0 auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,36 +100,22 @@ def toggle_theme():
     st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
 st.markdown(f"""<script>document.documentElement.setAttribute('data-theme', '{st.session_state.theme}');</script>""", unsafe_allow_html=True)
 
-st.title("⚡ HarshSwarm Pro")
-st.markdown("##### *Multi‑Agent Intelligence • Personalized Debate Panel • Evolving Memory*")
-st.caption("Where diverse AI perspectives collide to uncover truth.")
-
-with st.sidebar:
-    col1, col2 = st.columns([3, 1])
-    with col1: st.markdown("### 🎛️ Control Panel")
-    with col2:
-        theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
-        if st.button(theme_icon, help="Toggle dark/light mode"): toggle_theme(); st.rerun()
-
 # --- API Key Handling ---
 api_key = None
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
-    with st.sidebar: st.success("🔐 API key loaded")
 except (KeyError, FileNotFoundError):
     with st.sidebar:
-        st.warning("⚠️ No secret found. Enter key below.")
-        api_key = st.text_input("🔑 Gemini API Key", type="password")
-        if not api_key: st.stop()
+        st.error("🚨 API key not found in secrets. Please set GEMINI_API_KEY.")
+        st.stop()
 
 genai.configure(api_key=api_key)
 MODEL_NAME = 'gemma-3-27b-it'
 
-# --- Evolution Memory (Robust) ---
+# --- Evolution Memory (same as before) ---
 EVO_FILE = "evolution_memory.json"
 
 def load_evolution_memory():
-    # Try file first
     if os.path.exists(EVO_FILE):
         try:
             with open(EVO_FILE, "r") as f:
@@ -130,7 +123,6 @@ def load_evolution_memory():
                 st.session_state.evo_memory = data
                 return data
         except: pass
-    # Fallback to session state
     if "evo_memory" not in st.session_state:
         st.session_state.evo_memory = []
     return st.session_state.evo_memory
@@ -140,7 +132,7 @@ def save_evolution_memory(memory):
     try:
         with open(EVO_FILE, "w") as f:
             json.dump(memory, f, indent=2)
-    except: pass  # Silently fail if no write permissions
+    except: pass
 
 def add_winning_strategy(topic, verdict, winning_side, key_arguments):
     memory = load_evolution_memory()
@@ -163,25 +155,28 @@ def get_relevant_strategies(topic, max_entries=3):
     scored = []
     for entry in memory:
         entry_topic = entry["topic"].lower()
-        # Simple overlap scoring
         topic_words = set(topic_lower.split())
         entry_words = set(entry_topic.split())
         overlap = len(topic_words & entry_words)
-        # Bonus for longer phrase matches
         if topic_lower in entry_topic or entry_topic in topic_lower: overlap += 5
         scored.append((overlap, entry))
     scored.sort(key=lambda x: x[0], reverse=True)
-    # Return top entries with score > 0
     return [entry for score, entry in scored[:max_entries] if score > 0]
 
-# --- Sidebar ---
+# --- Sidebar Content ---
 with st.sidebar:
-    st.markdown("### 📰 Debate Topic")
-    topic = st.text_area("Paste a headline or article snippet", value="Apple announces new AI chip that uses 50% less power and is carbon neutral.", height=150)
+    col1, col2 = st.columns([3, 1])
+    with col1: st.markdown("### 🎛️ Control Panel")
+    with col2:
+        theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
+        if st.button(theme_icon, help="Toggle dark/light mode"): toggle_theme(); st.rerun()
+    
+    st.success("🔐 API key loaded from secrets")
     st.markdown("---")
-    st.markdown("### ⚙️ Core Settings")
+    st.markdown("### ⚙️ Debate Settings")
     rounds = st.slider("Debate Rounds", 2, 6, 3)
     use_tones = st.checkbox("🎭 Randomize agent tones", True)
+    
     st.markdown("---")
     st.markdown("### 🧑‍🤝‍🧑 Panel Members")
     extra_agents = st.multiselect(
@@ -190,6 +185,7 @@ with st.sidebar:
          "📱 Teju (Tech Journalist)", "🕵️ Shivam (Conspiracy Theorist)"],
         default=["💰 Kavya (Retail Investor)", "📱 Teju (Tech Journalist)"]
     )
+    
     st.markdown("---")
     with st.expander("🧬 Evolution Memory", expanded=True):
         memory = load_evolution_memory()
@@ -199,10 +195,8 @@ with st.sidebar:
                 st.markdown(f"- *{entry['topic'][:35]}...* ({entry['winning_side']})")
         else:
             st.caption("No strategies yet. Save one after a debate!")
-    # Debug toggle (optional)
-    debug_mode = st.checkbox("🐞 Debug mode", value=False)
 
-# --- Agent Classes ---
+# --- Agent Classes (unchanged) ---
 class AI_Agent:
     def __init__(self, name, personality, avatar):
         self.name = name
@@ -213,7 +207,6 @@ class AI_Agent:
     def speak(self, topic, last_msg, model, round_num, tone=None, evolution_context=""):
         history_text = "\n".join(self.history[-3:]) if self.history else "No previous chat."
         tone_str = f"Tone: {tone}." if tone else ""
-        # Stronger prompt injection for evolution
         evo_instruction = ""
         if evolution_context:
             evo_instruction = f"""
@@ -278,19 +271,18 @@ Provide:
 def random_tone():
     return random.choice(["calm", "aggressive", "sarcastic", "curious", "dismissive", "passionate"])
 
-# --- Agent Factory (same as before) ---
 def create_agents(extra_agent_keys):
     agents = {
-        "harsh": AI_Agent("Harsh", "Skeptical analyst. You find flaws, risks, and unintended consequences in every optimistic claim. You question assumptions and demand evidence.", "🔴"),
-        "jayant": AI_Agent("Jayant", "Optimistic visionary. You see opportunity and growth in disruption. You believe technology and innovation solve problems and create a better future.", "🟢"),
-        "ahany": Moderator("Ahany", "Lead moderator and sharp journalist. You challenge all sides, identify weak logic, and keep the debate focused and productive.", "🔵")
+        "harsh": AI_Agent("Harsh", "Skeptical analyst. You find flaws, risks, and unintended consequences in every optimistic claim.", "🔴"),
+        "jayant": AI_Agent("Jayant", "Optimistic visionary. You see opportunity and growth in disruption.", "🟢"),
+        "ahany": Moderator("Ahany", "Lead moderator and sharp journalist.", "🔵")
     }
     extra_map = {
-        "👔 Ritik (Policy Advisor)": ("Ritik", "Policy advisor. Government/regulatory perspective. Focus on public good and political feasibility.", "🟡"),
-        "💰 Kavya (Retail Investor)": ("Kavya", "Retail investor. Everyday person perspective. Practical impact on savings and lifestyle.", "🟣"),
-        "🔬 Nish (Scientist)": ("Nish", "Scientific skeptic. Demands empirical evidence and peer review.", "🟠"),
-        "📱 Teju (Tech Journalist)": ("Teju", "Tech journalist. Identifies trends and market narratives.", "🔷"),
-        "🕵️ Shivam (Conspiracy Theorist)": ("Shivam", "Conspiracy theorist. Sees hidden agendas and questions official narratives.", "⚫")
+        "👔 Ritik (Policy Advisor)": ("Ritik", "Policy advisor. Government/regulatory perspective.", "🟡"),
+        "💰 Kavya (Retail Investor)": ("Kavya", "Retail investor. Everyday person perspective.", "🟣"),
+        "🔬 Nish (Scientist)": ("Nish", "Scientific skeptic. Demands empirical evidence.", "🟠"),
+        "📱 Teju (Tech Journalist)": ("Teju", "Tech journalist. Identifies trends.", "🔷"),
+        "🕵️ Shivam (Conspiracy Theorist)": ("Shivam", "Conspiracy theorist. Sees hidden agendas.", "⚫")
     }
     for key in extra_agent_keys:
         if key in extra_map:
@@ -298,7 +290,7 @@ def create_agents(extra_agent_keys):
             agents[name.lower()] = AI_Agent(name, persona, avatar)
     return agents
 
-# --- Main Debate Function ---
+# --- Main Debate Function (same logic) ---
 def run_debate(topic, rounds, use_tones, extra_agent_keys):
     model = genai.GenerativeModel(MODEL_NAME)
     
@@ -314,8 +306,6 @@ def run_debate(topic, rounds, use_tones, extra_agent_keys):
     st.divider()
     st.subheader(f"📰 Topic: {topic}")
     st.caption(f"Rounds: {rounds} | Model: {MODEL_NAME} | Panelists: {len(agents)}")
-    if debug_mode:
-        st.write("🐞 Evolution context being used:", evolution_context if evolution_context else "None")
     if strategies:
         st.info(f"🧬 Evolution active: {len(strategies)} relevant past strategies loaded.")
     else:
@@ -396,15 +386,31 @@ def run_debate(topic, rounds, use_tones, extra_agent_keys):
     
     return verdict
 
-# --- Main Execution ---
-col1, col2, col3 = st.columns([1, 2.5, 1])
+# --- MAIN UI: Hero Section with Centered Input ---
+st.title("⚡ HarshSwarm Pro")
+st.markdown('<div class="hero-subtitle">Multi‑Agent Intelligence • Personalized Debate Panel • Evolving Memory</div>', unsafe_allow_html=True)
+st.caption("Where diverse AI perspectives collide to uncover truth.")
+
+# Centered topic input
+st.markdown("<br>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 3, 1])
 with col2:
-    if st.button("🚀 Launch Multi-Agent Debate", use_container_width=True):
-        if not topic:
-            st.error("Please enter a topic in the sidebar.")
-        else:
-            try:
-                run_debate(topic, rounds, use_tones, extra_agents)
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-                st.info("💡 If quota exceeded, wait a minute and try again.")
+    topic = st.text_area(
+        "📰 **What should the panel debate?**",
+        value="Apple announces new AI chip that uses 50% less power and is carbon neutral.",
+        height=120,
+        placeholder="Paste a news headline, policy announcement, or any topic...",
+        key="topic_input"
+    )
+    launch_button = st.button("🚀 Launch Multi‑Agent Debate", use_container_width=True)
+
+# If button clicked, run the debate
+if launch_button:
+    if not topic:
+        st.error("Please enter a topic.")
+    else:
+        try:
+            run_debate(topic, rounds, use_tones, extra_agents)
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+            st.info("💡 If quota exceeded, wait a minute and try again.")
