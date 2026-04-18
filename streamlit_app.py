@@ -4,413 +4,317 @@ import time
 import random
 import json
 import os
+import re
 from datetime import datetime
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="HarshSwarm Pro • AI Debate",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- Page Config ---
+st.set_page_config(page_title="HarshSwarm Pro", page_icon="⚡", layout="wide")
 
-# --- Premium Custom CSS (same as before) ---
+# --- Premium CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     :root {
-        --bg-primary: #f8fafc;
-        --bg-secondary: #ffffff;
-        --text-primary: #0f172a;
-        --text-secondary: #475569;
-        --card-bg: rgba(255, 255, 255, 0.85);
-        --card-border: rgba(148, 163, 184, 0.18);
-        --sidebar-bg: rgba(255, 255, 255, 0.7);
-        --gradient-start: #0ea5e9;
-        --gradient-mid: #8b5cf6;
-        --gradient-end: #ec4899;
-        --shadow-sm: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-        --shadow-lg: 0 20px 35px -8px rgba(0, 0, 0, 0.1);
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #e2e8f0;
     }
-    [data-theme="dark"] {
-        --bg-primary: #0b1120;
-        --bg-secondary: #1e293b;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --card-bg: rgba(30, 41, 59, 0.85);
-        --card-border: rgba(71, 85, 105, 0.3);
-        --sidebar-bg: rgba(15, 23, 42, 0.7);
-        --gradient-start: #38bdf8;
-        --gradient-mid: #a78bfa;
-        --gradient-end: #f472b6;
-        --shadow-sm: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-        --shadow-lg: 0 20px 35px -8px rgba(0, 0, 0, 0.4);
-    }
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        transition: background 0.3s ease, color 0.3s ease;
-    }
-    .main .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 1200px; }
-    h1 {
-        background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
-        background-size: 200% 200%;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800 !important;
-        font-size: 3.5rem !important;
-        letter-spacing: -0.02em;
-        margin-bottom: 0.25rem !important;
-        animation: gradientShift 8s ease infinite;
-        text-align: center;
-    }
-    @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-    .hero-subtitle {
-        text-align: center;
-        font-size: 1.2rem;
-        color: var(--text-secondary);
-        margin-bottom: 2rem;
-    }
-    [data-testid="stSidebar"] { background: var(--sidebar-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-right: 1px solid var(--card-border); }
-    [data-testid="stChatMessage"] {
-        background: var(--card-bg); backdrop-filter: blur(12px); border-radius: 24px; padding: 1.25rem 1.75rem;
-        box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; border-left: 6px solid; border: 1px solid var(--card-border);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    [data-testid="stChatMessage"]:hover { transform: translateY(-6px) scale(1.01); box-shadow: var(--shadow-lg); }
-    .stButton > button {
-        background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 100%);
-        color: white; font-weight: 700; font-size: 1.2rem; padding: 1rem 2.5rem; border-radius: 60px; border: none;
-        box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); transition: all 0.3s ease; letter-spacing: 0.3px;
-        border: 1px solid rgba(255, 255, 255, 0.1); animation: pulseGlow 2s infinite;
-    }
-    @keyframes pulseGlow { 0% { box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); } 50% { box-shadow: 0 12px 28px rgba(139, 92, 246, 0.4); } 100% { box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25); } }
-    .stButton > button:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 18px 35px rgba(139, 92, 246, 0.5); background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); animation: none; }
-    .verdict-box { background: var(--card-bg); backdrop-filter: blur(12px); border-radius: 28px; padding: 2rem 2.5rem; margin: 2rem 0; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: var(--shadow-sm); }
-    hr { margin: 2rem 0; border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--card-border), transparent); }
-    .centered-input { max-width: 800px; margin: 0 auto; }
+    .stApp { background: var(--bg); font-family: 'Inter', sans-serif; }
+    h1 { font-weight: 800; font-size: 2.8rem; background: linear-gradient(135deg, #0ea5e9, #8b5cf6, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0; }
+    .subtitle { color: var(--muted); font-size: 1.1rem; }
+    .control-bar { background: var(--card); border-radius: 24px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.04); margin-bottom: 1.5rem; border: 1px solid var(--border); }
+    .debate-card { background: var(--card); border-radius: 20px; padding: 1.5rem; margin-bottom: 1rem; border-left: 6px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+    .scoreboard { background: var(--card); border-radius: 20px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .verdict-box { background: linear-gradient(145deg, #f1f5f9, #ffffff); border-radius: 28px; padding: 2rem; margin-top: 2rem; border: 1px solid #cbd5e1; }
+    .highlight { background: #fef9c3; padding: 0.1rem 0.3rem; border-radius: 6px; font-weight: 500; }
+    .marker { background: #fee2e2; color: #b91c1c; padding: 0.1rem 0.4rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-right: 6px; }
+    .stButton>button { background: linear-gradient(135deg, #0ea5e9, #8b5cf6); color: white; border: none; border-radius: 60px; padding: 0.6rem 2rem; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Dark Mode Toggle ---
-if "theme" not in st.session_state:
-    st.session_state.theme = "light"
-def toggle_theme():
-    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-st.markdown(f"""<script>document.documentElement.setAttribute('data-theme', '{st.session_state.theme}');</script>""", unsafe_allow_html=True)
-
 # --- API Key Handling ---
-api_key = None
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
-except (KeyError, FileNotFoundError):
-    with st.sidebar:
-        st.error("🚨 API key not found in secrets. Please set GEMINI_API_KEY.")
-        st.stop()
-
+except:
+    st.error("API key not found in secrets.")
+    st.stop()
 genai.configure(api_key=api_key)
 MODEL_NAME = 'gemma-3-27b-it'
 
-# --- Evolution Memory (same as before) ---
-EVO_FILE = "evolution_memory.json"
+# --- Global Anti-Repetition Memory (per debate) ---
+if "global_arguments" not in st.session_state:
+    st.session_state.global_arguments = []
 
-def load_evolution_memory():
-    if os.path.exists(EVO_FILE):
-        try:
-            with open(EVO_FILE, "r") as f:
-                data = json.load(f)
-                st.session_state.evo_memory = data
-                return data
-        except: pass
-    if "evo_memory" not in st.session_state:
-        st.session_state.evo_memory = []
-    return st.session_state.evo_memory
+def add_global_memory(agent, text):
+    st.session_state.global_arguments.append(f"{agent}: {text[:200]}")
 
-def save_evolution_memory(memory):
-    st.session_state.evo_memory = memory
-    try:
-        with open(EVO_FILE, "w") as f:
-            json.dump(memory, f, indent=2)
-    except: pass
+def is_repetition(text, threshold=0.6):
+    words = set(text.lower().split())
+    for past in st.session_state.global_arguments[-10:]:
+        past_words = set(past.lower().split())
+        if len(words & past_words) / max(len(words),1) > threshold:
+            return True
+    return False
 
-def add_winning_strategy(topic, verdict, winning_side, key_arguments):
-    memory = load_evolution_memory()
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "topic": topic,
-        "verdict_summary": verdict,
-        "winning_side": winning_side,
-        "key_arguments": key_arguments
-    }
-    memory.append(entry)
-    if len(memory) > 30: memory = memory[-30:]
-    save_evolution_memory(memory)
-    return entry
-
-def get_relevant_strategies(topic, max_entries=3):
-    memory = load_evolution_memory()
-    if not memory: return []
-    topic_lower = topic.lower()
-    scored = []
-    for entry in memory:
-        entry_topic = entry["topic"].lower()
-        topic_words = set(topic_lower.split())
-        entry_words = set(entry_topic.split())
-        overlap = len(topic_words & entry_words)
-        if topic_lower in entry_topic or entry_topic in topic_lower: overlap += 5
-        scored.append((overlap, entry))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [entry for score, entry in scored[:max_entries] if score > 0]
-
-# --- Sidebar Content ---
-with st.sidebar:
-    col1, col2 = st.columns([3, 1])
-    with col1: st.markdown("### 🎛️ Control Panel")
-    with col2:
-        theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
-        if st.button(theme_icon, help="Toggle dark/light mode"): toggle_theme(); st.rerun()
-    
-    st.success("🔐 API key loaded from secrets")
-    st.markdown("---")
-    st.markdown("### ⚙️ Debate Settings")
-    rounds = st.slider("Debate Rounds", 2, 6, 3)
-    use_tones = st.checkbox("🎭 Randomize agent tones", True)
-    
-    st.markdown("---")
-    st.markdown("### 🧑‍🤝‍🧑 Panel Members")
-    extra_agents = st.multiselect(
-        "Invite more voices",
-        ["👔 Ritik (Policy Advisor)", "💰 Kavya (Retail Investor)", "🔬 Nish (Scientist)", 
-         "📱 Teju (Tech Journalist)", "🕵️ Shivam (Conspiracy Theorist)"],
-        default=["💰 Kavya (Retail Investor)", "📱 Teju (Tech Journalist)"]
-    )
-    
-    st.markdown("---")
-    with st.expander("🧬 Evolution Memory", expanded=True):
-        memory = load_evolution_memory()
-        if memory:
-            st.metric("Stored Strategies", len(memory))
-            for entry in memory[-3:]:
-                st.markdown(f"- *{entry['topic'][:35]}...* ({entry['winning_side']})")
-        else:
-            st.caption("No strategies yet. Save one after a debate!")
-
-# --- Agent Classes (unchanged) ---
+# --- Agent Class ---
 class AI_Agent:
-    def __init__(self, name, personality, avatar):
+    def __init__(self, name, role, personality, avatar, color):
         self.name = name
+        self.role = role
         self.personality = personality
         self.avatar = avatar
+        self.color = color
         self.history = []
+        self.scores = {"logic": 0, "creativity": 0, "persuasiveness": 0}
 
-    def speak(self, topic, last_msg, model, round_num, tone=None, evolution_context=""):
+    def speak(self, topic, last_msg, model, round_num, tone=None):
         history_text = "\n".join(self.history[-3:]) if self.history else "No previous chat."
-        tone_str = f"Tone: {tone}." if tone else ""
-        evo_instruction = ""
-        if evolution_context:
-            evo_instruction = f"""
-IMPORTANT - EVOLUTION MEMORY:
-The swarm has learned from past winning strategies on similar topics:
-{evolution_context}
-You MUST incorporate this wisdom into your argument. Reference a past winning insight if appropriate.
-"""
         prompt = f"""
-You are {self.name}. {self.personality} {tone_str}
+You are {self.name} ({self.role}). {self.personality}
 Debate round {round_num} about: "{topic}"
-Recent memory:
+
+STRICT FORMAT:
+**Claim:** [Your main point]
+**Evidence:** [Supporting fact/example]
+**Reasoning:** [Why it matters]
+
+DO NOT repeat previous arguments. Check history:
 {history_text}
-{evo_instruction}
+
 Last said: "{last_msg}"
-Respond in 2-4 sentences. Be persuasive and stay in character.
+
+Your response:
 """
-        response = model.generate_content(prompt)
-        reply = response.text
+        for attempt in range(2):
+            response = model.generate_content(prompt)
+            reply = response.text.strip()
+            if not is_repetition(reply):
+                break
+            prompt += "\nWARNING: Argument repeated. Provide a NEW angle."
+        else:
+            reply = "**Claim:** I stand by my position. **Evidence:** Already presented. **Reasoning:** Further discussion is needed."
         self.history.append(f"{self.name}: {reply}")
+        add_global_memory(self.name, reply)
         return reply
 
+# --- Moderator ---
 class Moderator(AI_Agent):
-    def speak(self, topic, last_msg, model, round_num, tone=None, evolution_context=""):
-        history_text = "\n".join(self.history[-5:]) if self.history else "No debate yet."
-        evo_instruction = ""
-        if evolution_context:
-            evo_instruction = f"""
-EVOLUTION MEMORY (past winning strategies on similar topics):
-{evolution_context}
-Use this to challenge panelists or highlight patterns.
-"""
+    def speak(self, topic, last_msg, model, round_num, tone=None):
+        history = "\n".join(self.history[-5:]) if self.history else "No debate yet."
         prompt = f"""
-You are {self.name}, a sharp journalist and moderator.
+You are {self.name}, the moderator. Summarize key points, highlight contradictions, and ask a sharp question.
 Topic: "{topic}" | Round: {round_num}
-History:
-{history_text}
-{evo_instruction}
+History: {history}
 Last exchange: "{last_msg}"
-Summarize key points, identify contradictions, and ask a provocative question.
 Keep it to 3-4 sentences.
 """
         response = model.generate_content(prompt)
-        reply = response.text
+        reply = response.text.strip()
         self.history.append(f"{self.name}: {reply}")
         return reply
 
-def get_verdict(topic, messages, model):
-    debate_text = "\n".join(messages[-20:])
+# --- Judge ---
+def judge_debate(topic, messages, model):
+    debate_text = "\n".join(messages[-30:])
     prompt = f"""
-Expert analysis of debate on: "{topic}"
-Transcript excerpt:
-{debate_text}
+You are the JUDGE. Debate on: "{topic}"
+Transcript: {debate_text}
+
 Provide:
-1. 🏆 Strongest arguments (which panelist made the most compelling case)
-2. ⚠️ Key risks identified
-3. 🚀 Key opportunities identified
-4. ⚖️ Balanced conclusion (2-3 sentences)
+🏆 Winner: [Name]
+📝 Reasoning: [2-3 sentences]
+
+Strengths & Weaknesses for each:
+- Harsh (Skeptic): ...
+- Jayant (Optimist): ...
+(others as applicable)
+
+📊 Scores (1-10) for Logic, Creativity, Persuasiveness in a table.
+
+⚖️ Final Takeaway: [1-2 sentences]
 """
-    return model.generate_content(prompt).text
+    resp = model.generate_content(prompt)
+    return resp.text
 
-def random_tone():
-    return random.choice(["calm", "aggressive", "sarcastic", "curious", "dismissive", "passionate"])
+# --- Score Calculator (simple heuristic based on structured arguments) ---
+def update_scores(agent, response):
+    text = response.lower()
+    if "claim:" in text: agent.scores["logic"] += 2
+    if "evidence:" in text: agent.scores["creativity"] += 2
+    if "reasoning:" in text: agent.scores["persuasiveness"] += 2
+    # Cap at 10 per round? We'll just accumulate and normalize later
 
-def create_agents(extra_agent_keys):
-    agents = {
-        "harsh": AI_Agent("Harsh", "Skeptical analyst. You find flaws, risks, and unintended consequences in every optimistic claim.", "🔴"),
-        "jayant": AI_Agent("Jayant", "Optimistic visionary. You see opportunity and growth in disruption.", "🟢"),
-        "ahany": Moderator("Ahany", "Lead moderator and sharp journalist.", "🔵")
-    }
-    extra_map = {
-        "👔 Ritik (Policy Advisor)": ("Ritik", "Policy advisor. Government/regulatory perspective.", "🟡"),
-        "💰 Kavya (Retail Investor)": ("Kavya", "Retail investor. Everyday person perspective.", "🟣"),
-        "🔬 Nish (Scientist)": ("Nish", "Scientific skeptic. Demands empirical evidence.", "🟠"),
-        "📱 Teju (Tech Journalist)": ("Teju", "Tech journalist. Identifies trends.", "🔷"),
-        "🕵️ Shivam (Conspiracy Theorist)": ("Shivam", "Conspiracy theorist. Sees hidden agendas.", "⚫")
-    }
-    for key in extra_agent_keys:
-        if key in extra_map:
-            name, persona, avatar = extra_map[key]
-            agents[name.lower()] = AI_Agent(name, persona, avatar)
+# --- Create Agents ---
+def create_agents(num_extra=2):
+    agents = [
+        AI_Agent("Harsh", "Skeptic", "Pessimistic economist. Finds flaws and risks.", "🔴", "#ef4444"),
+        AI_Agent("Jayant", "Optimist", "Cheerful tech investor. Sees opportunity.", "🟢", "#10b981"),
+        Moderator("Ahany", "Moderator", "Sharp journalist.", "🔵", "#3b82f6")
+    ]
+    extra_pool = [
+        ("Ritik", "Policy Advisor", "Government/regulation view.", "🟡", "#eab308"),
+        ("Kavya", "Retail Investor", "Everyday person perspective.", "🟣", "#8b5cf6"),
+        ("Nish", "Scientist", "Demands empirical evidence.", "🟠", "#f97316"),
+        ("Teju", "Tech Journalist", "Identifies trends.", "🔷", "#06b6d4"),
+        ("Shivam", "Conspiracy Theorist", "Sees hidden agendas.", "⚫", "#334155")
+    ]
+    for i in range(min(num_extra, len(extra_pool))):
+        name, role, pers, av, col = extra_pool[i]
+        agents.insert(-1, AI_Agent(name, role, pers, av, col))
     return agents
 
-# --- Main Debate Function (same logic) ---
-def run_debate(topic, rounds, use_tones, extra_agent_keys):
-    model = genai.GenerativeModel(MODEL_NAME)
-    
-    strategies = get_relevant_strategies(topic)
-    evolution_context = ""
-    if strategies:
-        evolution_context = "PAST WINNING STRATEGIES:\n"
-        for s in strategies:
-            evolution_context += f"- Topic: {s['topic']}\n  Winner: {s['winning_side']}\n  Key Argument: {s['key_arguments'][:300]}\n\n"
-    
-    agents = create_agents(extra_agent_keys)
-    
-    st.divider()
-    st.subheader(f"📰 Topic: {topic}")
-    st.caption(f"Rounds: {rounds} | Model: {MODEL_NAME} | Panelists: {len(agents)}")
-    if strategies:
-        st.info(f"🧬 Evolution active: {len(strategies)} relevant past strategies loaded.")
-    else:
-        st.info("ℹ️ No relevant past strategies found for this topic. Starting fresh.")
+# --- Main App ---
+st.title("⚡ HarshSwarm Pro")
+st.markdown('<div class="subtitle">Multi‑Agent AI Debate Engine • Judge • Live Scoring</div>', unsafe_allow_html=True)
+st.caption("Structured debates with anti‑repetition and expert judging.")
 
+# --- Control Bar ---
+with st.container():
+    st.markdown('<div class="control-bar">', unsafe_allow_html=True)
+    col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+    with col1:
+        topic = st.text_input("📰 Debate Topic", value="Apple announces new AI chip that uses 50% less power and is carbon neutral.")
+    with col2:
+        mode = st.selectbox("⚡ Mode", ["Quick (3 rounds)", "Standard (5 rounds)", "Deep (8 rounds)"])
+        rounds = 3 if "Quick" in mode else 5 if "Standard" in mode else 8
+    with col3:
+        num_extra = st.selectbox("👥 Extra Agents", [0,1,2,3,4,5], index=2)
+    with col4:
+        start_btn = st.button("🚀 Start Debate", use_container_width=True)
+    with col5:
+        reset_btn = st.button("🔄 Reset", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+if reset_btn:
+    for key in ["debate_log", "scores", "summary", "verdict", "progress", "debate_active"]:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.session_state.global_arguments = []
+    st.rerun()
+
+# --- Initialize Debate State ---
+if "debate_active" not in st.session_state:
+    st.session_state.debate_active = False
+if "debate_log" not in st.session_state:
+    st.session_state.debate_log = []
+if "scores" not in st.session_state:
+    st.session_state.scores = {}
+if "summary" not in st.session_state:
+    st.session_state.summary = ""
+if "verdict" not in st.session_state:
+    st.session_state.verdict = ""
+if "progress" not in st.session_state:
+    st.session_state.progress = 0
+
+# --- Layout Columns ---
+left_col, right_col = st.columns([2.2, 1])
+
+# --- Right Sidebar Panel ---
+with right_col:
+    st.markdown("### 📊 Live Scoreboard")
+    score_placeholder = st.empty()
+    
+    st.markdown("### 📈 Debate Progress")
+    progress_placeholder = st.empty()
+    
+    st.markdown("### 📝 Running Summary")
+    summary_placeholder = st.empty()
+
+# --- Left Debate Area ---
+with left_col:
+    chat_placeholder = st.empty()
+
+# --- Bottom Verdict Area ---
+verdict_placeholder = st.empty()
+
+# --- Run Debate if Start clicked ---
+if start_btn and not st.session_state.debate_active:
+    st.session_state.debate_active = True
+    st.session_state.debate_log = []
+    st.session_state.global_arguments = []
+    st.session_state.scores = {}
+    st.session_state.summary = ""
+    st.session_state.verdict = ""
+    st.session_state.progress = 0
+    
+    model = genai.GenerativeModel(MODEL_NAME)
+    agents = create_agents(num_extra)
+    for a in agents:
+        st.session_state.scores[a.name] = {"logic": 0, "creativity": 0, "persuasiveness": 0}
+    
     log = []
     last_msg = "Let's begin the debate."
     
-    speaking_order = ["harsh", "jayant"]
-    for key in agents:
-        if key not in ["harsh", "jayant", "ahany"]:
-            speaking_order.append(key)
-    
-    for r in range(1, rounds + 1):
-        st.markdown(f"### 🔄 Round {r}")
+    # --- Debate Loop ---
+    for r in range(1, rounds+1):
+        st.session_state.progress = r / rounds
+        progress_placeholder.progress(st.session_state.progress, f"Round {r} of {rounds}")
         
-        for agent_key in speaking_order:
-            if agent_key not in agents: continue
-            agent = agents[agent_key]
-            tone = random_tone() if use_tones else None
+        round_msgs = []
+        # Speaking order: Harsh, Jayant, extras, Moderator
+        order = [a for a in agents if a.name != "Ahany"]
+        for agent in order:
             with st.spinner(f"{agent.name} is thinking..."):
-                msg = agent.speak(topic, last_msg, model, r, tone, evolution_context)
-            with st.chat_message(agent.name, avatar=agent.avatar):
-                st.write(msg)
-            log.append(f"{agent.avatar} {agent.name}: {msg}")
-            last_msg = msg
-            time.sleep(1.2)
+                reply = agent.speak(topic, last_msg, model, r)
+            round_msgs.append(f"{agent.avatar} **{agent.name} ({agent.role})**: {reply}")
+            update_scores(agent, reply)
+            last_msg = reply
+            time.sleep(1)
+        # Moderator
+        mod = next(a for a in agents if a.name == "Ahany")
+        with st.spinner("Moderator summarizing..."):
+            mod_reply = mod.speak(topic, last_msg, model, r)
+        round_msgs.append(f"{mod.avatar} **{mod.name} ({mod.role})**: {mod_reply}")
+        last_msg = mod_reply
         
-        moderator = agents["ahany"]
-        tone_m = random_tone() if use_tones else None
-        with st.spinner(f"{moderator.name} is analyzing..."):
-            msg_m = moderator.speak(topic, last_msg, model, r, tone_m, evolution_context)
-        with st.chat_message(moderator.name, avatar=moderator.avatar):
-            st.write(msg_m)
-        log.append(f"{moderator.avatar} {moderator.name}: {msg_m}")
-        last_msg = msg_m
-        time.sleep(1.2)
+        log.append(f"### 🔄 Round {r}\n\n" + "\n\n".join(round_msgs))
+        st.session_state.debate_log = log.copy()
         
-        st.divider()
+        # Update scoreboard display
+        score_df = []
+        for a in agents:
+            score_df.append({
+                "Agent": f"{a.avatar} {a.name}",
+                "Logic": a.scores["logic"],
+                "Creativity": a.scores["creativity"],
+                "Persuasiveness": a.scores["persuasiveness"]
+            })
+        score_placeholder.dataframe(score_df, use_container_width=True, hide_index=True)
+        
+        # Generate running summary (every 2 rounds)
+        if r % 2 == 0 or r == rounds:
+            summary_prompt = f"Summarize key insights so far from debate on '{topic}'. 2-3 bullet points."
+            summ = model.generate_content(summary_prompt).text
+            st.session_state.summary = summ
+            summary_placeholder.markdown(f"**Key Insights:**\n\n{summ}")
+        
+        # Update chat display
+        full_chat = "\n\n".join(log)
+        chat_placeholder.markdown(full_chat)
+        time.sleep(0.5)
     
-    # Verdict
-    st.markdown("---")
-    st.subheader("🧠 Expert Verdict")
-    with st.spinner("Expert panel is deliberating..."):
-        verdict = get_verdict(topic, log, model)
-        st.markdown('<div class="verdict-box">' + verdict + '</div>', unsafe_allow_html=True)
-    st.success("✅ Debate concluded")
+    # --- Judge Verdict ---
+    with st.spinner("🧑‍⚖️ Judge is deliberating..."):
+        verdict = judge_debate(topic, log, model)
+        st.session_state.verdict = verdict
+    verdict_placeholder.markdown(f'<div class="verdict-box">{verdict}</div>', unsafe_allow_html=True)
+    
+    st.session_state.debate_active = False
     st.balloons()
-    
-    # Evolution save
-    st.markdown("---")
-    st.subheader("🧬 Evolve the Swarm")
-    
-    winner = "Unknown"
-    verdict_lower = verdict.lower()
-    if "jayant" in verdict_lower: winner = "Jayant"
-    elif "harsh" in verdict_lower: winner = "Harsh"
-    elif "ritik" in verdict_lower: winner = "Ritik"
-    elif "kavya" in verdict_lower: winner = "Kavya"
-    elif "nish" in verdict_lower: winner = "Nish"
-    elif "teju" in verdict_lower: winner = "Teju"
-    elif "shivam" in verdict_lower: winner = "Shivam"
-    elif "balanced" in verdict_lower or "tie" in verdict_lower: winner = "Tie"
-    
-    with st.expander("💾 Save this winning strategy to evolution memory", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            panel_names = ["Harsh", "Jayant"] + [k.split(" ")[1] for k in extra_agent_keys]
-            winning_side = st.selectbox("Which panelist had the strongest arguments?", panel_names,
-                                        index=panel_names.index(winner) if winner in panel_names else 0)
-        with col2:
-            key_arg = st.text_input("Key winning argument (brief)", value=verdict[:120] + "...")
-        
-        if st.button("🧬 Save to Evolution Memory", use_container_width=True):
-            entry = add_winning_strategy(topic, verdict, winning_side, key_arg)
-            st.success(f"✅ Strategy saved! The swarm now has {len(load_evolution_memory())} learned strategies.")
-            st.balloons()
-    
-    return verdict
 
-# --- MAIN UI: Hero Section with Centered Input ---
-st.title("⚡ HarshSwarm Pro")
-st.markdown('<div class="hero-subtitle">Multi‑Agent Intelligence • Personalized Debate Panel • Evolving Memory</div>', unsafe_allow_html=True)
-st.caption("Where diverse AI perspectives collide to uncover truth.")
-
-# Centered topic input
-st.markdown("<br>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1, 3, 1])
-with col2:
-    topic = st.text_area(
-        "📰 **What should the panel debate?**",
-        value="Apple announces new AI chip that uses 50% less power and is carbon neutral.",
-        height=120,
-        placeholder="Paste a news headline, policy announcement, or any topic...",
-        key="topic_input"
-    )
-    launch_button = st.button("🚀 Launch Multi‑Agent Debate", use_container_width=True)
-
-# If button clicked, run the debate
-if launch_button:
-    if not topic:
-        st.error("Please enter a topic.")
-    else:
-        try:
-            run_debate(topic, rounds, use_tones, extra_agents)
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
-            st.info("💡 If quota exceeded, wait a minute and try again.")
+# --- Display existing state if debate already finished ---
+elif not st.session_state.debate_active and st.session_state.debate_log:
+    chat_placeholder.markdown("\n\n".join(st.session_state.debate_log))
+    if st.session_state.verdict:
+        verdict_placeholder.markdown(f'<div class="verdict-box">{st.session_state.verdict}</div>', unsafe_allow_html=True)
+    # Rebuild scoreboard from stored scores
+    score_data = []
+    for name, s in st.session_state.scores.items():
+        score_data.append({"Agent": name, "Logic": s["logic"], "Creativity": s["creativity"], "Persuasiveness": s["persuasiveness"]})
+    if score_data:
+        score_placeholder.dataframe(score_data, use_container_width=True, hide_index=True)
+    progress_placeholder.progress(1.0, "Completed")
+    if st.session_state.summary:
+        summary_placeholder.markdown(f"**Key Insights:**\n\n{st.session_state.summary}")
