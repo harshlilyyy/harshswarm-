@@ -253,7 +253,6 @@ MODEL_CHAIN = [
         "type": "google"
     },
 ]
-
 def get_working_model():
     for config in MODEL_CHAIN:
         if not config["api_key"]:
@@ -411,7 +410,6 @@ Strengths & Weaknesses for each panelist.
 ⚖️ Final Takeaway: [1-2 sentences]
 """
     return generate_response(prompt, system_prompt)
-
 def create_agents(num_extra=4):
     agents = [
         AI_Agent("Harsh", "Skeptic", "Pessimistic economist. Finds flaws and risks.", "🔴", "#ef4444"),
@@ -485,7 +483,6 @@ with st.sidebar:
         "</p>",
         unsafe_allow_html=True
     )
-
 # --- Main UI ---
 st.title("💗 Nyx Protocol 💗")
 st.markdown('<div class="hero-subtitle">Multi‑Agent AI Debate · Judge · Live Scoring · Quantum Randomness</div>', unsafe_allow_html=True)
@@ -567,4 +564,36 @@ if start_btn and topic:
 
     # Social Share
     share_text = f"Nyx Protocol verdict on '{topic}':\n\nWinner: {winner}\n\n{verdict[:200]}...\n\nTry it: https://harshswarmdev.streamlit.app"
-    tweet = 
+    tweet = urllib.parse.quote(share_text)
+    twitter_url = f"https://twitter.com/intent/tweet?text={tweet}"
+    linkedin_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote('https://harshswarmdev.streamlit.app')}"
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f'<a href="{twitter_url}" target="_blank"><button style="background:#1DA1F2; color:white; border:none; padding:10px 20px; border-radius:30px; font-weight:bold; width:100%;">🐦 Share on X</button></a>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<a href="{linkedin_url}" target="_blank"><button style="background:#0077B5; color:white; border:none; padding:10px 20px; border-radius:30px; font-weight:bold; width:100%;">💼 Share on LinkedIn</button></a>', unsafe_allow_html=True)
+
+    # PDF Export
+    pdf_data = generate_pdf(topic, log, verdict, winner)
+    st.download_button(
+        label="📄 Download Full Debate (PDF)",
+        data=pdf_data,
+        file_name=f"nyx_debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+        mime="application/pdf"
+    )
+
+    # Footer Signature
+    st.markdown("---")
+    st.markdown(
+        "<p style='text-align: center; font-family: \"Dancing Script\", cursive; font-size: 1.8rem; color: #e87b9e; margin-top: 2rem;'>"
+        "✨ crafted with love by Harsh Dubey ✨"
+        "</p>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        "<p style='text-align: center; font-size: 0.9rem; color: #b8a9a9; margin-top: -0.5rem;'>"
+        "💗 Nyx Protocol • Where AI meets emotion 💗"
+        "</p>",
+        unsafe_allow_html=True
+    )
