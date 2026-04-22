@@ -229,7 +229,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Multi-Model Router (Secure - no hardcoded keys) ---
+# --- Multi-Model Router (Secure) ---
 MODEL_CHAIN = [
     {
         "provider": "groq",
@@ -255,7 +255,6 @@ MODEL_CHAIN = [
 ]
 
 def get_working_model():
-    """Test each model in the chain and return the first working configuration."""
     for config in MODEL_CHAIN:
         if not config["api_key"]:
             st.sidebar.warning(f"⚠️ {config['provider']} API key missing")
@@ -506,25 +505,25 @@ with col2:
 if start_btn and topic:
     st.session_state.global_arguments = []
     agents = create_agents(extra)
-    
+
     log = []
     last_msg = "Let's begin."
     winner = None
     verdict = ""
-    
+
     left, right = st.columns([2.2, 1])
     with right:
         score_place = st.empty()
         prog_place = st.empty()
     with left:
         chat_place = st.empty()
-    
+
     for r in range(1, rounds + 1):
         prog_place.progress(r / rounds, f"Round {r} of {rounds}")
         st.markdown("---")
         st.markdown(f"<h2 style='text-align: center; animation: pulse 2s infinite;'>🌸 Round {r} — Let Love Decide 🌸</h2>", unsafe_allow_html=True)
         st.markdown("---")
-        
+
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
         for agent in order:
@@ -533,37 +532,39 @@ if start_btn and topic:
             round_msgs.append(f"{agent.avatar} **{agent.name} ({agent.role})**: {reply}")
             last_msg = reply
             time.sleep(1.2)
-        
+
         mod = next(a for a in agents if a.name == "Ahany")
         with st.spinner("Moderator summarizing..."):
             mod_reply = mod.speak(topic, last_msg, r)
         round_msgs.append(f"{mod.avatar} **{mod.name}**: {mod_reply}")
         last_msg = mod_reply
-        
+
         log.append(f"### 🔄 Round {r}\n\n" + "\n\n".join(round_msgs))
         chat_place.markdown("\n\n".join(log))
-        
+
         score_data = [{"Agent": f"{a.avatar} {a.name}", "Logic": a.scores["logic"], "Creativity": a.scores["creativity"], "Persuasiveness": a.scores["persuasiveness"]} for a in agents]
         score_place.dataframe(score_data, use_container_width=True, hide_index=True)
         time.sleep(0.5)
-    
+
     # Verdict
     with st.spinner("🧑‍⚖️ Judge deliberating..."):
         verdict = judge_debate(topic, log)
-    
+
     match = re.search(r"Winner:\s*(\w+)", verdict)
     winner = match.group(1) if match else "Unknown"
-    
+
     for agent in st.session_state.agent_stats:
         if agent == winner:
             st.session_state.agent_stats[agent]["wins"] += 1
         else:
             st.session_state.agent_stats[agent]["losses"] += 1
-    
+
     st.markdown("---")
     st.subheader("🧑‍⚖️ Judge's Verdict")
     st.markdown(f'<div class="verdict-box">{verdict}</div>', unsafe_allow_html=True)
     st.success(f"💖 Cupid's Choice: {winner} 💖")
     st.balloons()
-    
-    shar
+
+    # Social Share
+    share_text = f"Nyx Protocol verdict on '{topic}':\n\nWinner: {winner}\n\n{verdict[:200]}...\n\nTry it: https://harshswarmdev.streamlit.app"
+    tweet = 
