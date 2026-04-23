@@ -92,7 +92,7 @@ st.markdown("""
 
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.6) !important;
-        backdrop-filter: blur(15px);
+        backdrop-filter: blur(15px lifetime);
         border: 0.5px solid var(--glass-border) !important;
         border-radius: 60px !important;
     }
@@ -159,38 +159,56 @@ if "agent_stats" not in st.session_state:
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 
-# --- API Providers (Fallback Chain) ---
+# --- API Providers (6 providers, Groq reserved for Judge) ---
 PROVIDERS = [
     {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
     {"name": "DeepSeek", "key": st.secrets.get("DEEPSEEK_API_KEY"), "base": "https://api.deepseek.com", "model": "deepseek-chat"},
     {"name": "Cerebras", "key": st.secrets.get("CEREBRAS_API_KEY"), "base": "https://api.cerebras.ai/v1", "model": "llama3.3-70b"},
     {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/auto"},
+    {"name": "Mistral", "key": st.secrets.get("MISTRAL_API_KEY"), "base": "https://api.mistral.ai/v1", "model": "mistral-small-2409"},
+    {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"},
 ]
 
 def get_client(provider):
     return OpenAI(api_key=provider["key"], base_url=provider["base"])
 
-def generate_with_fallback(prompt, system="", preferred=None):
+def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False):
     if preferred:
         providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
         providers = PROVIDERS
 
+    last_error = None
     for p in providers:
         if not p["key"]:
             continue
         try:
-            client = get_client(p)
-            messages = []
-            if system:
-                messages.append({"role": "system", "content": system})
-            messages.append({"role": "user", "content": prompt})
-            resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.7, max_tokens=250)
-            return resp.choices[0].message.content.strip(), p["name"]
-        except Exception:
+            if p["name"] == "Google":
+                import google.generativeai as genai
+                genai.configure(api_key=p["key"])
+                model = genai.GenerativeModel(p["model"])
+                full_prompt = f"{system}\n\n{prompt}" if system else prompt
+                resp = model.generate_content(full_prompt)
+                return resp.text.strip(), p["name"]
+            else:
+                client = OpenAI(api_key=p["key"], base_url=p["base"])
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                resp = client.chat.completions.create(
+                    model=p["model"], messages=messages, temperature=0.7, max_tokens=250
+                )
+                return resp.choices[0].message.content.strip(), p["name"]
+        except Exception as e:
+            last_error = str(e)[:80]
             continue
-    st.error("All APIs failed. Check your keys or limits.")
-    st.stop()
+
+    if silent_fail:
+        return "Unable to generate response due to API limits.", "None"
+    else:
+        st.warning(f"⚠️ All providers temporarily unavailable. Last error: {last_error}")
+        return "Response unavailable.", "None"
 
 # --- Agents ---
 class Agent:
@@ -249,7 +267,7 @@ def create_panel(count=6):
         agents.insert(2, moderator)
     return agents
 
-def judge(topic, messages, preferred_provider):
+def judge(topic, messages):
     text = "\n".join(messages[-20:])
     prompt = f"""You are the JUDGE of a debate. Analyze the transcript below.
 **Debate Topic:** "{topic}"
@@ -264,7 +282,8 @@ Rebuttal: [score 1-10]
 Persuasiveness: [score 1-10]
 Takeaway: [1 sentence final insight]
 """
-    reply, _ = generate_with_fallback(prompt, "You are an impartial expert judge.", preferred_provider)
+    # Reserve Groq exclusively for the judge
+    reply, _ = generate_with_fallback(prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
     return reply
 
 def make_pdf(topic, log, verdict, winner):
@@ -282,16 +301,16 @@ def make_pdf(topic, log, verdict, winner):
     pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
     pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
-# --- UI: Header with Subtitle & Preset ---
+# --- UI: Header with Subtitle ---
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">An AI debate arena. Ask anything.</div>', unsafe_allow_html=True)
 
-# --- Compact Input Card (smart defaults, renamed labels) ---
+# --- Compact Input Card ---
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     topic = st.text_input("Ask anything...", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
     
-    # Advanced settings collapsible (hidden by default to reduce clutter)
+    # Advanced settings (hidden by default)
     with st.expander("⚙️ Customize debate", expanded=False):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -308,14 +327,15 @@ with st.container():
     launch = st.button("Start Debate", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Debate Execution (now with round tracker, collapsible cards, and better verdict) ---
+# --- Debate Execution ---
 if launch and topic:
+    # Map mode to preferred provider (but Groq is reserved for judge, so we never use it for agents)
     if mode == "⚡ Fast":
         preferred = "Cerebras"
     elif mode == "🧠 Smart":
-        preferred = "Groq"
+        preferred = "DeepSeek"
     else:
-        preferred = None
+        preferred = None  # Auto will try all except Groq (since it's reserved)
     
     agents = create_panel(agent_count)
     log = []
@@ -333,7 +353,7 @@ if launch and topic:
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
         
-        # Persona chips row (simplified: just names)
+        # Persona chips
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
         
@@ -352,7 +372,7 @@ if launch and topic:
                     st.markdown(f'<div class="debate-card {agent.card_class}">{reply}</div>', unsafe_allow_html=True)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
-            time.sleep(0.3)
+            time.sleep(0.8)  # Throttle to avoid rate limits
         
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
@@ -370,14 +390,13 @@ if launch and topic:
     
     st.session_state.debate_history = log
     
-    # Credibility: show provider & fallback
     if used_provider:
         st.caption(f"⚙️ Powered by {used_provider}")
     if fallback_warning:
         st.warning("⚠️ The primary provider was unavailable; the debate automatically switched to a backup model.")
     
     with st.spinner("Judgment..."):
-        verdict = judge(topic, log, preferred)
+        verdict = judge(topic, log)
     
     # Parse verdict into structured display
     winner_match = re.search(r"Winner:\s*(.+)", verdict)
@@ -404,10 +423,10 @@ if launch and topic:
         <p><strong>Reasoning:</strong> {reasoning}</p>
         <hr style="margin:1rem 0;border:0.5px solid rgba(0,0,0,0.1);"/>
         <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.9rem;">
-            <div><strong>Logic:</strong> {logic_match.group(1) if reply else '?'}/10</div>
-            <div><strong>Evidence:</strong> {evidence_match.group(1) if reply else '?'}/10</div>
-            <div><strong>Rebuttal:</strong> {rebuttal_match.group(1) if reply else '?'}/10</div>
-            <div><strong>Persuasiveness:</strong> {persuasiveness_match.group(1) if reply else '?'}/10</div>
+            <div><strong>Logic:</strong> {logic_match.group(1) if logic_match else '?'}/10</div>
+            <div><strong>Evidence:</strong> {evidence_match.group(1) if evidence_match else '?'}/10</div>
+            <div><strong>Rebuttal:</strong> {rebuttal_match.group(1) if rebuttal_match else '?'}/10</div>
+            <div><strong>Persuasiveness:</strong> {persuasiveness_match.group(1) if persuasiveness_match else '?'}/10</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -419,7 +438,7 @@ if launch and topic:
         follow_up = st.text_input("Ask about the debate...", placeholder="e.g., 'Why that winner?'", key="follow_up", label_visibility="collapsed")
         if st.button("Ask", key="ask_follow") and follow_up:
             context = "\n".join(st.session_state.debate_history[-5:])
-            reply, _ = generate_with_fallback(f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences.", "", preferred)
+            reply, _ = generate_with_fallback(f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences.", "", "DeepSeek", silent_fail=True)
             st.markdown(f"""
             <div class="debate-card" style="border-left-color:#D4A5A5;">
                 <div class="agent-name">💬 Nyx</div>
