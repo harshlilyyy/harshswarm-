@@ -11,7 +11,7 @@ from fpdf import FPDF
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="Nyx Protocol",
+    page_title="Nyx",
     page_icon="🤍",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -413,4 +413,4 @@ if launch and topic:
         pdf = generate_pdf(topic, log, verdict, winner)
         st.download_button("📄 PDF", pdf, f"nyx_{datetime.now():%Y%m%d_%H%M}.pdf")
 
-st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6;">✨ Harsh Dubey · Nyx Protocol ✨</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
