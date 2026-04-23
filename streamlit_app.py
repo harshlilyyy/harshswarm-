@@ -1,27 +1,24 @@
 import streamlit as st
 import time
-import random
-import json
-import os
-import urllib.parse
 import secrets
 import re
+import urllib.parse
 from datetime import datetime
 from fpdf import FPDF
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="Nyx",
+    page_title="Nyx · by Harsh",
     page_icon="🤍",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# --- Soft Glass CSS (Cosmic Pearl) ---
+# --- Cosmic Pearl Glassmorphism CSS ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;350;400;500&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap');
 
     :root {
@@ -43,8 +40,8 @@ st.markdown("""
     }
 
     .main .block-container {
-        padding: 1.5rem 1rem !important;
-        max-width: 600px !important;
+        padding: 2rem 1.25rem !important;
+        max-width: 640px !important;
         margin: 0 auto !important;
     }
 
@@ -55,12 +52,21 @@ st.markdown("""
     .nyx-title {
         font-family: 'Playfair Display', serif;
         font-style: italic;
-        font-size: 3.2rem;
+        font-size: 3.8rem;
         text-align: center;
         background: linear-gradient(145deg, var(--rose-gold), #B58D8D);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .subtitle {
+        text-align: center;
+        font-weight: 300;
+        opacity: 0.6;
+        margin-bottom: 2rem;
+        letter-spacing: 2px;
+        font-size: 0.8rem;
     }
 
     .glass-card {
@@ -100,6 +106,7 @@ st.markdown("""
         color: white;
         box-shadow: 0 8px 20px -8px rgba(212,165,165,0.4);
         width: 100%;
+        padding: 0.8rem 1.5rem;
     }
 
     .debate-card {
@@ -110,6 +117,15 @@ st.markdown("""
         margin-bottom: 0.8rem;
         border-left: 5px solid;
     }
+
+    .card-skeptic { border-left-color: #D4A5A5; }
+    .card-optimist { border-left-color: #B5C9B5; }
+    .card-philosopher { border-left-color: #C5B5D4; }
+    .card-futurist { border-left-color: #A5C9D4; }
+    .card-data { border-left-color: #A5D4C0; }
+    .card-ethicist { border-left-color: #D4A5C0; }
+    .card-policy { border-left-color: #E8D5B5; }
+    .card-conspiracy { border-left-color: #B5A5C0; }
 
     .verdict-box {
         background: rgba(255, 255, 255, 0.5);
@@ -135,16 +151,17 @@ if "agent_stats" not in st.session_state:
     }
 if "global_arguments" not in st.session_state:
     st.session_state.global_arguments = []
-
-# --- Models Configuration ---
+if "debate_history" not in st.session_state:
+    st.session_state.debate_history = []
+# --- Providers (Fixed Mistral Model) ---
 PROVIDERS = {
     "🤍 Auto": {"provider": "auto", "model": None, "type": None, "base_url": None},
     "Groq (Llama 3.3)": {"provider": "groq", "model": "llama-3.3-70b-versatile", "type": "openai", "base_url": "https://api.groq.com/openai/v1"},
     "DeepSeek": {"provider": "deepseek", "model": "deepseek-chat", "type": "openai", "base_url": "https://api.deepseek.com"},
-    "Mistral (Small 4)": {"provider": "mistral", "model": "mistral-small-4", "type": "openai", "base_url": "https://api.mistral.ai/v1"},
-    "Cerebras (Llama 3.3)": {"provider": "cerebras", "model": "llama-3.3-70b", "type": "openai", "base_url": "https://api.cerebras.ai/v1"},
-    "OpenRouter (Auto)": {"provider": "openrouter", "model": "openrouter/auto", "type": "openai", "base_url": "https://openrouter.ai/api/v1"},
-    "Google (Gemma 4)": {"provider": "google", "model": "gemma-4-26b-it", "type": "google", "base_url": None},
+    "Mistral (Small)": {"provider": "mistral", "model": "mistral-small-latest", "type": "openai", "base_url": "https://api.mistral.ai/v1"},
+    "Cerebras (Llama)": {"provider": "cerebras", "model": "llama-3.3-70b", "type": "openai", "base_url": "https://api.cerebras.ai/v1"},
+    "OpenRouter": {"provider": "openrouter", "model": "openrouter/auto", "type": "openai", "base_url": "https://openrouter.ai/api/v1"},
+    "Google (Gemma)": {"provider": "google", "model": "gemma-4-26b-it", "type": "google", "base_url": None},
 }
 
 PROVIDER_API_KEYS = {
@@ -156,47 +173,40 @@ PROVIDER_API_KEYS = {
     "google": st.secrets.get("GEMINI_API_KEY", ""),
 }
 
-# Auto model keywords mapping
 MODEL_KEYWORDS = {
-    "philosoph": ["Mistral (Small 4)"],
-    "ethics": ["Mistral (Small 4)"],
-    "moral": ["Mistral (Small 4)"],
+    "philosoph": ["Mistral (Small)"],
+    "ethics": ["Mistral (Small)"],
     "tech": ["Groq (Llama 3.3)"],
     "future": ["Groq (Llama 3.3)"],
-    "data": ["Cerebras (Llama 3.3)"],
-    "science": ["Cerebras (Llama 3.3)"],
+    "data": ["Cerebras (Llama)"],
+    "science": ["Cerebras (Llama)"],
     "conspiracy": ["DeepSeek"],
-    "policy": ["OpenRouter (Auto)"],
-    "law": ["OpenRouter (Auto)"],
-    "google": ["Google (Gemma 4)"],
-    "ai": ["Groq (Llama 3.3)"],
+    "policy": ["OpenRouter"],
+    "google": ["Google (Gemma)"],
 }
 
 def resolve_auto_model(topic: str) -> str:
-    """Select best model based on topic keywords."""
     topic_lower = topic.lower()
     for keyword, models in MODEL_KEYWORDS.items():
         if keyword in topic_lower:
             return models[0]
-    return "Groq (Llama 3.3)"  # default
+    return "Groq (Llama 3.3)"
 
 def get_actual_model_config(selected_display: str, topic: str = ""):
-    """Resolve Auto if needed, then return config with valid API key."""
     if selected_display == "🤍 Auto":
         selected_display = resolve_auto_model(topic)
-        st.toast(f"🤍 Auto selected: {selected_display}", icon="✨")
-    
+        st.toast(f"🤍 Auto → {selected_display}", icon="✨")
     config = PROVIDERS[selected_display].copy()
     provider = config["provider"]
     config["api_key"] = PROVIDER_API_KEYS.get(provider, "")
     if not config["api_key"]:
-        # Try fallback chain
         for fallback in ["groq", "deepseek", "mistral", "cerebras", "openrouter", "google"]:
             key = PROVIDER_API_KEYS.get(fallback, "")
             if key:
-                config = PROVIDERS.get(next(k for k,v in PROVIDERS.items() if v["provider"]==fallback)).copy()
+                fallback_display = next(k for k,v in PROVIDERS.items() if v["provider"]==fallback)
+                config = PROVIDERS[fallback_display].copy()
                 config["api_key"] = key
-                st.toast(f"⚠️ Fallback to {fallback}", icon="⚠️")
+                st.toast(f"⚠️ Fallback → {fallback}", icon="⚠️")
                 return config
         st.error("No API keys configured.")
         st.stop()
@@ -226,17 +236,6 @@ def generate_response(prompt, system_prompt, client_tuple, model_name):
             model=model_name, messages=messages, temperature=0.7, max_tokens=250
         )
         return resp.choices[0].message.content.strip()
-# --- Helper Functions ---
-def is_repetition(text, threshold=0.6):
-    words = set(text.lower().split())
-    for past in st.session_state.global_arguments[-12:]:
-        past_words = set(past.lower().split())
-        if len(words & past_words) / max(len(words), 1) > threshold:
-            return True
-    return False
-
-def add_global_memory(agent, text):
-    st.session_state.global_arguments.append(f"{agent}: {text[:200]}")
 
 # --- 12 Agents ---
 class Agent:
@@ -248,25 +247,18 @@ class Agent:
         system_prompt = f"You are {self.name} ({self.role}). {self.personality}"
         prompt = f"""Debate round {round_num} on: "{topic}"
 **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
-Avoid repeating. History: {history}
-Last said: "{last_msg}"
+History: {history}
+Last: "{last_msg}"
 """
-        for _ in range(2):
-            reply = generate_response(prompt, system_prompt, client_tuple, model_name)
-            if not is_repetition(reply):
-                break
-            prompt += "\nWARNING: Repeated. New angle required."
-        else:
-            reply = "I've made my point sufficiently."
+        reply = generate_response(prompt, system_prompt, client_tuple, model_name)
         self.history.append(reply)
-        add_global_memory(self.name, reply)
         return reply
 
 class Moderator(Agent):
     def speak(self, topic, last_msg, round_num, client_tuple, model_name):
         history = "\n".join(self.history[-5:]) or "No debate yet."
         system_prompt = f"You are {self.name}, the moderator. Be sharp and impartial."
-        prompt = f"Summarize key points, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
+        prompt = f"Summarize, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
         reply = generate_response(prompt, system_prompt, client_tuple, model_name)
         self.history.append(reply)
         return reply
@@ -274,16 +266,16 @@ class Moderator(Agent):
 def create_full_panel():
     return [
         Agent("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
-        Agent("Jayant", "Optimist", "Sees opportunity and growth.", "🟢", "card-optimist"),
+        Agent("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
         Moderator("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic"),
-        Agent("Ritik", "Policy Advisor", "Government and regulation lens.", "🟡", "card-policy"),
-        Agent("Kavya", "Retail Investor", "Everyday person perspective.", "🟣", "card-optimist"),
-        Agent("Nish", "Scientist", "Empirical evidence only.", "🟠", "card-data"),
+        Agent("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
+        Agent("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
+        Agent("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
         Agent("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
         Agent("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
-        Agent("Philosopher", "Philosopher", "Ethical and historical context.", "🟤", "card-philosopher"),
+        Agent("Philosopher", "Philosopher", "Ethical/historical context.", "🟤", "card-philosopher"),
         Agent("Futurist", "Futurist", "50-year perspective.", "🔮", "card-futurist"),
-        Agent("DataScientist", "Data Scientist", "Statistics and evidence.", "📊", "card-data"),
+        Agent("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
         Agent("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
     ]
 
@@ -297,7 +289,7 @@ def generate_pdf(topic, log, verdict, winner):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Nyx Protocol Transcript", ln=1)
+    pdf.cell(200, 10, txt="Nyx Debate Transcript", ln=1)
     pdf.cell(200, 10, txt=f"Topic: {topic}", ln=1)
     pdf.ln(5)
     for msg in log:
@@ -308,29 +300,28 @@ def generate_pdf(topic, log, verdict, winner):
     pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
     pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
-
-# --- UI ---
+# --- UI Header ---
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
-st.markdown('<div style="text-align:center; opacity:0.6; margin-bottom:1.5rem;">— AI DEBATE PROTOCOL —</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">— AI DEBATE ARENA —</div>', unsafe_allow_html=True)
 
+# --- Input Card ---
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
     topic = st.text_input("Debate Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
-    
     col1, col2 = st.columns([3, 2])
     with col1:
         selected_model = st.selectbox("Model", list(PROVIDERS.keys()), index=0)
     with col2:
         rounds = st.select_slider("Rounds", options=[2, 3, 4, 5], value=3)
-    
     show_args = st.checkbox("Show full debate arguments", value=True)
-    
     launch = st.button("▶ Initiate Debate", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+# --- Debate Execution ---
 if launch and topic:
-    # Resolve model
+    st.session_state.global_arguments = []
+    st.session_state.debate_history = []
+    
     config = get_actual_model_config(selected_model, topic)
     client_tuple = get_client(config)
     model_name = config["model"]
@@ -350,17 +341,14 @@ if launch and topic:
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
         for agent in order:
+            reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
             if show_args:
-                with st.spinner(f"{agent.name} speaking..."):
-                    reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
                 st.markdown(f"""
                 <div class="debate-card {agent.card_class}">
                     <div class="agent-name">{agent.avatar} {agent.name} · {agent.role}</div>
                     <div class="agent-message">{reply}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
-                reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
             time.sleep(0.6)
@@ -378,12 +366,13 @@ if launch and topic:
         last_msg = mod_reply
         log.append("\n".join(round_msgs))
     
+    st.session_state.debate_history = log
+    
     with st.spinner("Judgment in progress..."):
         verdict = judge_debate(topic, log, client_tuple, model_name)
     match = re.search(r"Winner:?\s*(\w+)", verdict, re.IGNORECASE)
     winner = match.group(1) if match else "Unknown"
     
-    # Update stats
     for agent in st.session_state.agent_stats:
         if agent == winner:
             st.session_state.agent_stats[agent]["wins"] += 1
@@ -397,6 +386,23 @@ if launch and topic:
     </div>
     """, unsafe_allow_html=True)
     
+    # --- Follow‑up Layer ---
+    with st.container():
+        st.markdown('<div class="glass-card" style="margin-top:0.5rem;">', unsafe_allow_html=True)
+        st.markdown("**💬 Continue the discussion**")
+        follow_up = st.text_input("Ask a follow‑up question...", placeholder="e.g., 'Why that winner?' or 'What was the weakest argument?'", key="follow_up", label_visibility="collapsed")
+        if st.button("Ask", key="ask_follow") and follow_up:
+            context = "\n".join(st.session_state.debate_history[-5:])
+            prompt = f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences."
+            reply = generate_response(prompt, None, client_tuple, model_name)
+            st.markdown(f"""
+            <div class="debate-card" style="border-left-color:#D4A5A5;">
+                <div class="agent-name">💬 Nyx</div>
+                <div class="agent-message">{reply}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
     # Stats expander
     with st.expander("📊 Agent Win Rates"):
         for agent, s in st.session_state.agent_stats.items():
@@ -405,7 +411,7 @@ if launch and topic:
             st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
     
     # Share & PDF
-    share = f"Nyx Protocol: {winner} wins on '{topic}'"
+    share = f"Nyx verdict: {winner} wins on '{topic}'"
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Tweet</button></a>', unsafe_allow_html=True)
@@ -413,4 +419,5 @@ if launch and topic:
         pdf = generate_pdf(topic, log, verdict, winner)
         st.download_button("📄 PDF", pdf, f"nyx_{datetime.now():%Y%m%d_%H%M}.pdf")
 
-st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
+# --- Footer ---
+st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6; font-family:\'Playfair Display\',serif; font-style:italic;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
