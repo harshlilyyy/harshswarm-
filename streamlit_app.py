@@ -1,12 +1,12 @@
 import streamlit as st
 import time
-import secrets
 import re
 import urllib.parse
 from datetime import datetime
 from fpdf import FPDF
+from openai import OpenAI
 
-# --- Page Configuration ---
+# --- Page Config ---
 st.set_page_config(
     page_title="Nyx · by Harsh",
     page_icon="🤍",
@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- Cosmic Pearl Glassmorphism CSS ---
+# --- Cosmic Pearl CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -149,121 +149,69 @@ if "agent_stats" not in st.session_state:
         "Futurist": {"wins": 0, "losses": 0}, "DataScientist": {"wins": 0, "losses": 0},
         "Ethicist": {"wins": 0, "losses": 0}, "Ahany": {"wins": 0, "losses": 0},
     }
-if "global_arguments" not in st.session_state:
-    st.session_state.global_arguments = []
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
-# --- Providers (Fixed Mistral Model) ---
-PROVIDERS = {
-    "🤍 Auto": {"provider": "auto", "model": None, "type": None, "base_url": None},
-    "Groq (Llama 3.3)": {"provider": "groq", "model": "llama-3.3-70b-versatile", "type": "openai", "base_url": "https://api.groq.com/openai/v1"},
-    "DeepSeek": {"provider": "deepseek", "model": "deepseek-chat", "type": "openai", "base_url": "https://api.deepseek.com"},
-    "Mistral (Small)": {"provider": "mistral", "model": "mistral-small-latest", "type": "openai", "base_url": "https://api.mistral.ai/v1"},
-    "Cerebras (Llama)": {"provider": "cerebras", "model": "llama-3.3-70b", "type": "openai", "base_url": "https://api.cerebras.ai/v1"},
-    "OpenRouter": {"provider": "openrouter", "model": "openrouter/auto", "type": "openai", "base_url": "https://openrouter.ai/api/v1"},
-    "Google (Gemma)": {"provider": "google", "model": "gemma-4-26b-it", "type": "google", "base_url": None},
-}
 
-PROVIDER_API_KEYS = {
-    "groq": st.secrets.get("GROQ_API_KEY", ""),
-    "deepseek": st.secrets.get("DEEPSEEK_API_KEY", ""),
-    "mistral": st.secrets.get("MISTRAL_API_KEY", ""),
-    "cerebras": st.secrets.get("CEREBRAS_API_KEY", ""),
-    "openrouter": st.secrets.get("OPENROUTER_API_KEY", ""),
-    "google": st.secrets.get("GEMINI_API_KEY", ""),
-}
+# --- API Providers (Fallback Chain) ---
+PROVIDERS = [
+    {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
+    {"name": "DeepSeek", "key": st.secrets.get("DEEPSEEK_API_KEY"), "base": "https://api.deepseek.com", "model": "deepseek-chat"},
+    {"name": "Cerebras", "key": st.secrets.get("CEREBRAS_API_KEY"), "base": "https://api.cerebras.ai/v1", "model": "llama3.3-70b"},
+    {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/auto"},
+]
 
-MODEL_KEYWORDS = {
-    "philosoph": ["Mistral (Small)"],
-    "ethics": ["Mistral (Small)"],
-    "tech": ["Groq (Llama 3.3)"],
-    "future": ["Groq (Llama 3.3)"],
-    "data": ["Cerebras (Llama)"],
-    "science": ["Cerebras (Llama)"],
-    "conspiracy": ["DeepSeek"],
-    "policy": ["OpenRouter"],
-    "google": ["Google (Gemma)"],
-}
+def get_client(provider):
+    return OpenAI(api_key=provider["key"], base_url=provider["base"])
 
-def resolve_auto_model(topic: str) -> str:
-    topic_lower = topic.lower()
-    for keyword, models in MODEL_KEYWORDS.items():
-        if keyword in topic_lower:
-            return models[0]
-    return "Groq (Llama 3.3)"
-
-def get_actual_model_config(selected_display: str, topic: str = ""):
-    if selected_display == "🤍 Auto":
-        selected_display = resolve_auto_model(topic)
-        st.toast(f"🤍 Auto → {selected_display}", icon="✨")
-    config = PROVIDERS[selected_display].copy()
-    provider = config["provider"]
-    config["api_key"] = PROVIDER_API_KEYS.get(provider, "")
-    if not config["api_key"]:
-        for fallback in ["groq", "deepseek", "mistral", "cerebras", "openrouter", "google"]:
-            key = PROVIDER_API_KEYS.get(fallback, "")
-            if key:
-                fallback_display = next(k for k,v in PROVIDERS.items() if v["provider"]==fallback)
-                config = PROVIDERS[fallback_display].copy()
-                config["api_key"] = key
-                st.toast(f"⚠️ Fallback → {fallback}", icon="⚠️")
-                return config
-        st.error("No API keys configured.")
-        st.stop()
-    return config
-
-def get_client(config):
-    if config["type"] == "google":
-        import google.generativeai as genai
-        genai.configure(api_key=config["api_key"])
-        return ("google", genai.GenerativeModel(config["model"]), None)
+def generate_with_fallback(prompt, system="", preferred=None):
+    # If preferred is given, try it first, then fallback
+    if preferred:
+        providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
-        from openai import OpenAI
-        client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
-        return ("openai", None, client)
+        providers = PROVIDERS
 
-def generate_response(prompt, system_prompt, client_tuple, model_name):
-    type_, google_model, openai_client = client_tuple
-    if type_ == "google":
-        full = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-        return google_model.generate_content(full).text
-    else:
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        resp = openai_client.chat.completions.create(
-            model=model_name, messages=messages, temperature=0.7, max_tokens=250
-        )
-        return resp.choices[0].message.content.strip()
-
-# --- 12 Agents ---
+    for p in providers:
+        if not p["key"]:
+            continue
+        try:
+            client = get_client(p)
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.7, max_tokens=250)
+            return resp.choices[0].message.content.strip(), p["name"]
+        except Exception:
+            continue
+    st.error("All APIs failed. Check your keys or limits.")
+    st.stop()
+# --- Agents ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-    def speak(self, topic, last_msg, round_num, client_tuple, model_name):
+    def speak(self, topic, last_msg, round_num, preferred_provider):
         history = "\n".join(self.history[-3:]) or "No previous chat."
-        system_prompt = f"You are {self.name} ({self.role}). {self.personality}"
+        system = f"You are {self.name} ({self.role}). {self.personality}"
         prompt = f"""Debate round {round_num} on: "{topic}"
 **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
 History: {history}
 Last: "{last_msg}"
 """
-        reply = generate_response(prompt, system_prompt, client_tuple, model_name)
+        reply, _ = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
         return reply
 
 class Moderator(Agent):
-    def speak(self, topic, last_msg, round_num, client_tuple, model_name):
+    def speak(self, topic, last_msg, round_num, preferred_provider):
         history = "\n".join(self.history[-5:]) or "No debate yet."
-        system_prompt = f"You are {self.name}, the moderator. Be sharp and impartial."
+        system = f"You are {self.name}, the moderator. Be sharp and impartial."
         prompt = f"Summarize, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
-        reply = generate_response(prompt, system_prompt, client_tuple, model_name)
+        reply, _ = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
         return reply
 
-def create_full_panel():
+def create_panel():
     return [
         Agent("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
         Agent("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
@@ -279,13 +227,13 @@ def create_full_panel():
         Agent("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
     ]
 
-def judge_debate(topic, messages, client_tuple, model_name):
-    debate_text = "\n".join(messages[-20:])
-    system_prompt = "You are the JUDGE. Deliver a fair, detailed verdict."
-    prompt = f"""Debate: "{topic}"\nTranscript: {debate_text}\nProvide: Winner name, 2-sentence reasoning, and final takeaway."""
-    return generate_response(prompt, system_prompt, client_tuple, model_name)
+def judge(topic, messages, preferred_provider):
+    text = "\n".join(messages[-20:])
+    prompt = f"""Debate: "{topic}"\nTranscript: {text}\nProvide: Winner, 2-sentence reasoning, final takeaway."""
+    reply, _ = generate_with_fallback(prompt, "You are the JUDGE.", preferred_provider)
+    return reply
 
-def generate_pdf(topic, log, verdict, winner):
+def make_pdf(topic, log, verdict, winner):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -307,30 +255,33 @@ st.markdown('<div class="subtitle">— AI DEBATE ARENA —</div>', unsafe_allow_
 # --- Input Card ---
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    topic = st.text_input("Debate Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
-    col1, col2 = st.columns([3, 2])
+    topic = st.text_input("Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+    
+    col1, col2 = st.columns(2)
     with col1:
-        selected_model = st.selectbox("Model", list(PROVIDERS.keys()), index=0)
+        rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2)
     with col2:
-        rounds = st.select_slider("Rounds", options=[2, 3, 4, 5], value=3)
-    show_args = st.checkbox("Show full debate arguments", value=True)
-    launch = st.button("▶ Initiate Debate", use_container_width=True)
+        mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2)
+    
+    show_args = st.checkbox("Show arguments", value=True)
+    launch = st.button("▶ Initiate", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Debate Execution ---
 if launch and topic:
-    st.session_state.global_arguments = []
-    st.session_state.debate_history = []
+    # Map mode to preferred provider
+    if mode == "⚡ Fast":
+        preferred = "Cerebras"
+    elif mode == "🧠 Smart":
+        preferred = "Groq"
+    else:
+        preferred = None  # full fallback
     
-    config = get_actual_model_config(selected_model, topic)
-    client_tuple = get_client(config)
-    model_name = config["model"]
-    
-    agents = create_full_panel()
+    agents = create_panel()
     log = []
     last_msg = "Let's begin."
     winner = None
     verdict = ""
+    used_provider = None
     
     if show_args:
         st.markdown("### ⚔️ THE ARENA")
@@ -341,7 +292,12 @@ if launch and topic:
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
         for agent in order:
-            reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
+            reply, provider = generate_with_fallback(
+                f"Round {r} on '{topic}'. History: {last_msg}",
+                f"You are {agent.name} ({agent.role}). {agent.personality}",
+                preferred
+            )
+            used_provider = provider
             if show_args:
                 st.markdown(f"""
                 <div class="debate-card {agent.card_class}">
@@ -351,10 +307,14 @@ if launch and topic:
                 """, unsafe_allow_html=True)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
-            time.sleep(0.6)
+            time.sleep(0.3)
         
         mod = next(a for a in agents if a.name == "Ahany")
-        mod_reply = mod.speak(topic, last_msg, r, client_tuple, model_name)
+        mod_reply, _ = generate_with_fallback(
+            f"Moderate round {r} on '{topic}'. Last: {last_msg}",
+            f"You are {mod.name}, the moderator.",
+            preferred
+        )
         if show_args:
             st.markdown(f"""
             <div class="debate-card" style="border-left-color:#D4A5A5;">
@@ -367,9 +327,15 @@ if launch and topic:
         log.append("\n".join(round_msgs))
     
     st.session_state.debate_history = log
+    if used_provider:
+        st.caption(f"⚙️ Powered by {used_provider}")
     
-    with st.spinner("Judgment in progress..."):
-        verdict = judge_debate(topic, log, client_tuple, model_name)
+    with st.spinner("Judgment..."):
+        verdict, _ = generate_with_fallback(
+            f"Judge the debate on '{topic}'. Transcript: {' '.join(log)}",
+            "You are the JUDGE.",
+            preferred
+        )
     match = re.search(r"Winner:?\s*(\w+)", verdict, re.IGNORECASE)
     winner = match.group(1) if match else "Unknown"
     
@@ -386,15 +352,14 @@ if launch and topic:
     </div>
     """, unsafe_allow_html=True)
     
-    # --- Follow‑up Layer ---
+    # Follow‑up
     with st.container():
         st.markdown('<div class="glass-card" style="margin-top:0.5rem;">', unsafe_allow_html=True)
-        st.markdown("**💬 Continue the discussion**")
-        follow_up = st.text_input("Ask a follow‑up question...", placeholder="e.g., 'Why that winner?' or 'What was the weakest argument?'", key="follow_up", label_visibility="collapsed")
+        st.markdown("**💬 Follow‑up**")
+        follow_up = st.text_input("Ask about the debate...", placeholder="e.g., 'Why that winner?'", key="follow_up", label_visibility="collapsed")
         if st.button("Ask", key="ask_follow") and follow_up:
             context = "\n".join(st.session_state.debate_history[-5:])
-            prompt = f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences."
-            reply = generate_response(prompt, None, client_tuple, model_name)
+            reply, _ = generate_with_fallback(f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences.", "", preferred)
             st.markdown(f"""
             <div class="debate-card" style="border-left-color:#D4A5A5;">
                 <div class="agent-name">💬 Nyx</div>
@@ -403,8 +368,8 @@ if launch and topic:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Stats expander
-    with st.expander("📊 Agent Win Rates"):
+    # Stats
+    with st.expander("📊 Win Rates"):
         for agent, s in st.session_state.agent_stats.items():
             total = s['wins']+s['losses']
             rate = f"{s['wins']/total*100:.0f}%" if total else "0%"
@@ -416,7 +381,7 @@ if launch and topic:
     with col_a:
         st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Tweet</button></a>', unsafe_allow_html=True)
     with col_b:
-        pdf = generate_pdf(topic, log, verdict, winner)
+        pdf = make_pdf(topic, log, verdict, winner)
         st.download_button("📄 PDF", pdf, f"nyx_{datetime.now():%Y%m%d_%H%M}.pdf")
 
 # --- Footer ---
