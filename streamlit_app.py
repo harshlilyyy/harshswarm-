@@ -63,10 +63,9 @@ st.markdown("""
     .subtitle {
         text-align: center;
         font-weight: 300;
-        opacity: 0.6;
-        margin-bottom: 2rem;
-        letter-spacing: 2px;
-        font-size: 0.8rem;
+        opacity: 0.7;
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
     }
 
     .glass-card {
@@ -135,6 +134,14 @@ st.markdown("""
         margin: 1.5rem 0;
         border-left: 5px solid var(--rose-gold);
         font-family: 'Courier Prime', monospace;
+    }
+
+    .round-tracker {
+        text-align: center;
+        margin: 0.5rem 0 0.8rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+        opacity: 0.8;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -244,8 +251,20 @@ def create_panel(count=6):
 
 def judge(topic, messages, preferred_provider):
     text = "\n".join(messages[-20:])
-    prompt = f"""Debate: "{topic}"\nTranscript: {text}\nProvide: Winner, 2-sentence reasoning, final takeaway."""
-    reply, _ = generate_with_fallback(prompt, "You are the JUDGE.", preferred_provider)
+    prompt = f"""You are the JUDGE of a debate. Analyze the transcript below.
+**Debate Topic:** "{topic}"
+**Transcript:** {text}
+
+Return your verdict in exactly this format:
+Winner: [Name]
+Reasoning: [2-3 sentences on why they won]
+Logic: [score 1-10]
+Evidence: [score 1-10]
+Rebuttal: [score 1-10]
+Persuasiveness: [score 1-10]
+Takeaway: [1 sentence final insight]
+"""
+    reply, _ = generate_with_fallback(prompt, "You are an impartial expert judge.", preferred_provider)
     return reply
 
 def make_pdf(topic, log, verdict, winner):
@@ -263,26 +282,33 @@ def make_pdf(topic, log, verdict, winner):
     pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
     pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
-# --- UI ---
+# --- UI: Header with Subtitle & Preset ---
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">— AI DEBATE ARENA —</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">An AI debate arena. Ask anything.</div>', unsafe_allow_html=True)
 
+# --- Compact Input Card (smart defaults, renamed labels) ---
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    topic = st.text_input("Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+    topic = st.text_input("Ask anything...", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2)
-    with col2:
-        agent_count = st.select_slider("Agents", options=list(range(3, 13)), value=6, help="Number of debaters (includes moderator)")
-    with col3:
-        mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2)
+    # Advanced settings collapsible (hidden by default to reduce clutter)
+    with st.expander("⚙️ Customize debate", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.caption("Depth")
+            rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2, label_visibility="collapsed")
+        with col2:
+            st.caption("Debaters")
+            agent_count = st.select_slider("Agents", options=list(range(3, 13)), value=6, label_visibility="collapsed")
+        with col3:
+            st.caption("Speed vs. quality")
+            mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2, label_visibility="collapsed")
+        show_args = st.checkbox("Show arguments", value=True)
     
-    show_args = st.checkbox("Show arguments", value=True)
-    launch = st.button("▶ Initiate", use_container_width=True)
+    launch = st.button("Start Debate", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+# --- Debate Execution (now with round tracker, collapsible cards, and better verdict) ---
 if launch and topic:
     if mode == "⚡ Fast":
         preferred = "Cerebras"
@@ -297,74 +323,92 @@ if launch and topic:
     winner = None
     verdict = ""
     used_provider = None
+    fallback_warning = False
     
     if show_args:
         st.markdown("### ⚔️ THE ARENA")
     
     for r in range(1, rounds+1):
-        if show_args:
-            st.markdown(f"**Round {r}**")
+        st.markdown(f'<div class="round-tracker">Round {r} of {rounds}</div>', unsafe_allow_html=True)
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
+        
+        # Persona chips row (simplified: just names)
+        persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
+        st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
+        
         for agent in order:
             reply, provider = generate_with_fallback(
                 f"Round {r} on '{topic}'. History: {last_msg}",
                 f"You are {agent.name} ({agent.role}). {agent.personality}",
                 preferred
             )
+            if used_provider and provider != used_provider:
+                fallback_warning = True
             used_provider = provider
+            
             if show_args:
-                st.markdown(f"""
-                <div class="debate-card {agent.card_class}">
-                    <div class="agent-name">{agent.avatar} {agent.name} · {agent.role}</div>
-                    <div class="agent-message">{reply}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.expander(f"{agent.avatar} {agent.name} · {agent.role}", expanded=True):
+                    st.markdown(f'<div class="debate-card {agent.card_class}">{reply}</div>', unsafe_allow_html=True)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
             time.sleep(0.3)
         
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
-            mod_reply, _ = generate_with_fallback(
+            mod_reply, provider = generate_with_fallback(
                 f"Moderate round {r} on '{topic}'. Last: {last_msg}",
                 f"You are {mod.name}, the moderator.",
                 preferred
             )
             if show_args:
-                st.markdown(f"""
-                <div class="debate-card" style="border-left-color:#D4A5A5;">
-                    <div class="agent-name">{mod.avatar} {mod.name} · Moderator</div>
-                    <div class="agent-message">{mod_reply}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.expander(f"{mod.avatar} {mod.name} · Moderator", expanded=True):
+                    st.markdown(f'<div class="debate-card" style="border-left-color:#D4A5A5;">{mod_reply}</div>', unsafe_allow_html=True)
             round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
             last_msg = mod_reply
         log.append("\n".join(round_msgs))
     
     st.session_state.debate_history = log
+    
+    # Credibility: show provider & fallback
     if used_provider:
         st.caption(f"⚙️ Powered by {used_provider}")
+    if fallback_warning:
+        st.warning("⚠️ The primary provider was unavailable; the debate automatically switched to a backup model.")
     
     with st.spinner("Judgment..."):
-        verdict, _ = generate_with_fallback(
-            f"Judge the debate on '{topic}'. Transcript: {' '.join(log)}",
-            "You are the JUDGE.",
-            preferred
-        )
-    match = re.search(r"Winner:?\s*(\w+)", verdict, re.IGNORECASE)
-    winner = match.group(1) if match else "Unknown"
+        verdict = judge(topic, log, preferred)
     
+    # Parse verdict into structured display
+    winner_match = re.search(r"Winner:\s*(.+)", verdict)
+    reasoning_match = re.search(r"Reasoning:\s*(.+)", verdict)
+    logic_match = re.search(r"Logic:\s*(\d+)", verdict)
+    evidence_match = re.search(r"Evidence:\s*(\d+)", verdict)
+    rebuttal_match = re.search(r"Rebuttal:\s*(\d+)", verdict)
+    persuasiveness_match = re.search(r"Persuasiveness:\s*(\d+)", verdict)
+    
+    winner = winner_match.group(1).strip() if winner_match else "Unknown"
+    reasoning = reasoning_match.group(1).strip() if reasoning_match else "No detailed reasoning provided."
+    
+    # Update stats
     for agent in st.session_state.agent_stats:
         if agent == winner:
             st.session_state.agent_stats[agent]["wins"] += 1
         else:
             st.session_state.agent_stats[agent]["losses"] += 1
     
+    # Verdict display with scorecard
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
-        <p>{verdict}</p>
+        <p><strong>Reasoning:</strong> {reasoning}</p>
+        <hr style="margin:1rem 0;border:0.5px solid rgba(0,0,0,0.1);"/>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.9rem;">
+            <div><strong>Logic:</strong> {logic_match.group(1) if reply else '?'}/10</div>
+            <div><strong>Evidence:</strong> {evidence_match.group(1) if reply else '?'}/10</div>
+            <div><strong>Rebuttal:</strong> {rebuttal_match.group(1) if reply else '?'}/10</div>
+            <div><strong>Persuasiveness:</strong> {persuasiveness_match.group(1) if reply else '?'}/10</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -384,14 +428,13 @@ if launch and topic:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Stats
-    with st.expander("📊 Win Rates"):
+    # Stats & Sharing
+    with st.expander("📊 Agent Leaderboard"):
         for agent, s in st.session_state.agent_stats.items():
             total = s['wins']+s['losses']
             rate = f"{s['wins']/total*100:.0f}%" if total else "0%"
             st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
     
-    # Share & PDF
     share = f"Nyx verdict: {winner} wins on '{topic}'"
     col_a, col_b = st.columns(2)
     with col_a:
