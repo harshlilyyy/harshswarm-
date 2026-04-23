@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- Cosmic Pearl CSS ---
+# --- Cosmic Pearl Glassmorphism CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -164,7 +164,6 @@ def get_client(provider):
     return OpenAI(api_key=provider["key"], base_url=provider["base"])
 
 def generate_with_fallback(prompt, system="", preferred=None):
-    # If preferred is given, try it first, then fallback
     if preferred:
         providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
@@ -185,6 +184,7 @@ def generate_with_fallback(prompt, system="", preferred=None):
             continue
     st.error("All APIs failed. Check your keys or limits.")
     st.stop()
+
 # --- Agents ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
@@ -211,21 +211,36 @@ class Moderator(Agent):
         self.history.append(reply)
         return reply
 
-def create_panel():
-    return [
-        Agent("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
-        Agent("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-        Moderator("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic"),
-        Agent("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
-        Agent("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
-        Agent("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
-        Agent("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
-        Agent("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
-        Agent("Philosopher", "Philosopher", "Ethical/historical context.", "🟤", "card-philosopher"),
-        Agent("Futurist", "Futurist", "50-year perspective.", "🔮", "card-futurist"),
-        Agent("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
-        Agent("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
-    ]
+ALL_AGENTS = [
+    ("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
+    ("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
+    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),
+    ("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
+    ("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
+    ("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
+    ("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
+    ("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
+    ("Philosopher", "Philosopher", "Ethical/historical context.", "🟤", "card-philosopher"),
+    ("Futurist", "Futurist", "50-year perspective.", "🔮", "card-futurist"),
+    ("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
+    ("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
+]
+
+def create_panel(count=6):
+    if count < 3:
+        count = 3
+    agents = []
+    moderator = None
+    for i, agent_data in enumerate(ALL_AGENTS):
+        if i >= count:
+            break
+        if len(agent_data) == 6 and agent_data[5]:
+            moderator = Moderator(agent_data[0], agent_data[1], agent_data[2], agent_data[3], agent_data[4])
+        else:
+            agents.append(Agent(agent_data[0], agent_data[1], agent_data[2], agent_data[3], agent_data[4]))
+    if moderator and len(agents) >= 2:
+        agents.insert(2, moderator)
+    return agents
 
 def judge(topic, messages, preferred_provider):
     text = "\n".join(messages[-20:])
@@ -248,19 +263,20 @@ def make_pdf(topic, log, verdict, winner):
     pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
     pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
-# --- UI Header ---
+# --- UI ---
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">— AI DEBATE ARENA —</div>', unsafe_allow_html=True)
 
-# --- Input Card ---
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     topic = st.text_input("Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2)
     with col2:
+        agent_count = st.select_slider("Agents", options=list(range(3, 13)), value=6, help="Number of debaters (includes moderator)")
+    with col3:
         mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2)
     
     show_args = st.checkbox("Show arguments", value=True)
@@ -268,15 +284,14 @@ with st.container():
     st.markdown('</div>', unsafe_allow_html=True)
 
 if launch and topic:
-    # Map mode to preferred provider
     if mode == "⚡ Fast":
         preferred = "Cerebras"
     elif mode == "🧠 Smart":
         preferred = "Groq"
     else:
-        preferred = None  # full fallback
+        preferred = None
     
-    agents = create_panel()
+    agents = create_panel(agent_count)
     log = []
     last_msg = "Let's begin."
     winner = None
@@ -309,21 +324,22 @@ if launch and topic:
             last_msg = reply
             time.sleep(0.3)
         
-        mod = next(a for a in agents if a.name == "Ahany")
-        mod_reply, _ = generate_with_fallback(
-            f"Moderate round {r} on '{topic}'. Last: {last_msg}",
-            f"You are {mod.name}, the moderator.",
-            preferred
-        )
-        if show_args:
-            st.markdown(f"""
-            <div class="debate-card" style="border-left-color:#D4A5A5;">
-                <div class="agent-name">{mod.avatar} {mod.name} · Moderator</div>
-                <div class="agent-message">{mod_reply}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
-        last_msg = mod_reply
+        mod = next((a for a in agents if a.name == "Ahany"), None)
+        if mod:
+            mod_reply, _ = generate_with_fallback(
+                f"Moderate round {r} on '{topic}'. Last: {last_msg}",
+                f"You are {mod.name}, the moderator.",
+                preferred
+            )
+            if show_args:
+                st.markdown(f"""
+                <div class="debate-card" style="border-left-color:#D4A5A5;">
+                    <div class="agent-name">{mod.avatar} {mod.name} · Moderator</div>
+                    <div class="agent-message">{mod_reply}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
+            last_msg = mod_reply
         log.append("\n".join(round_msgs))
     
     st.session_state.debate_history = log
