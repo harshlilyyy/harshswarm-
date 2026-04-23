@@ -9,16 +9,15 @@ import re
 from datetime import datetime
 from fpdf import FPDF
 
-# --- Page Configuration (Mobile-First) ---
+# --- Page Configuration ---
 st.set_page_config(
-    page_title="Nyx",
+    page_title="Nyx Protocol",
     page_icon="🤍",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items=None
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# --- Cosmic Pearl Theme: iOS 18 Glass, Light, Spatial Layers ---
+# --- Soft Glass CSS (Cosmic Pearl) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&display=swap');
@@ -27,10 +26,9 @@ st.markdown("""
 
     :root {
         --pearl: #F9F6F0;
-        --champagne: #E8D5B5;
         --rose-gold: #D4A5A5;
+        --champagne: #E8D5B5;
         --warm-charcoal: #2C2A28;
-        --taupe: #7A7672;
         --glass-border: rgba(255,255,255,0.6);
     }
 
@@ -41,409 +39,378 @@ st.markdown("""
     }
 
     .stApp {
-        background: radial-gradient(circle at 50% 30%, rgba(232,213,181,0.2) 0%, var(--pearl) 80%);
-        background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="none" stroke="%23E8E0D5" stroke-width="0.3" opacity="0.15"/></svg>');
+        background: radial-gradient(circle at 50% 20%, rgba(232,213,181,0.25) 0%, var(--pearl) 80%);
     }
 
-    [data-testid="stSidebar"] { display: none; }
-    footer { display: none; }
     .main .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
-        margin: 0 !important;
+        padding: 1.5rem 1rem !important;
+        max-width: 600px !important;
+        margin: 0 auto !important;
     }
 
-    /* ----- LAYER 1: Persistent Left Rail (Frosted Glass) ----- */
-    .left-rail {
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 64px;
-        background: rgba(255, 255, 255, 0.55);
-        backdrop-filter: blur(25px);
-        -webkit-backdrop-filter: blur(25px);
-        border-right: 0.5px solid var(--glass-border);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: space-between;
-        padding: 24px 0 16px 0;
-        z-index: 100;
-        box-shadow: 8px 0 30px rgba(0,0,0,0.02);
+    [data-testid="stToolbar"], footer, [data-testid="stSidebar"] {
+        display: none !important;
     }
 
-    .rail-logo {
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
+    .nyx-title {
         font-family: 'Playfair Display', serif;
         font-style: italic;
-        font-size: 22px;
-        font-weight: 500;
-        background: linear-gradient(145deg, var(--rose-gold), var(--champagne));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: 6px;
-        transform: rotate(180deg);
-    }
-
-    .agent-orbs {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        align-items: center;
-    }
-
-    .orb {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.7);
-        backdrop-filter: blur(8px);
-        border: 0.5px solid var(--glass-border);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.02);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        animation: breathe 3s infinite ease-in-out;
-        transition: transform 0.15s;
-    }
-    .orb:active { transform: scale(0.92); }
-
-    @keyframes breathe {
-        0%, 100% { opacity: 0.8; box-shadow: 0 0 5px var(--rose-gold); }
-        50% { opacity: 1; box-shadow: 0 0 12px var(--champagne); }
-    }
-
-    .live-badge {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        font-family: 'Inter', sans-serif;
-        font-weight: 300;
-        font-size: 11px;
-        letter-spacing: 2px;
-        color: var(--taupe);
-    }
-    .live-dot {
-        width: 8px;
-        height: 8px;
-        background: #8EC0B5;
-        border-radius: 50%;
-        box-shadow: 0 0 12px #A8D8CC;
-    }
-
-    /* ----- LAYER 2: Main Stage (Floating Cards) ----- */
-    .main-stage {
-        margin-left: 64px;
-        padding: 20px 16px 90px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-    }
-
-    .topic-card {
-        background: rgba(255, 255, 255, 0.55);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 36px;
-        padding: 28px 24px;
-        border: 0.5px solid var(--glass-border);
-        box-shadow: 0 15px 35px -10px rgba(0,0,0,0.04);
+        font-size: 3.2rem;
         text-align: center;
-    }
-
-    .topic-text {
-        font-family: 'Playfair Display', serif;
-        font-style: italic;
-        font-size: 26px;
-        line-height: 1.3;
         background: linear-gradient(145deg, var(--rose-gold), #B58D8D);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin: 0;
+        margin-bottom: 0.5rem;
     }
 
-    .debate-card {
+    .glass-card {
         background: rgba(255, 255, 255, 0.5);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border-radius: 28px;
-        padding: 20px 22px;
-        margin-bottom: 14px;
-        border-left: 5px solid;
-        border-image: none;
-        box-shadow: 0 10px 25px -8px rgba(0,0,0,0.03);
-        transition: transform 0.2s;
-    }
-
-    .card-skeptic { border-left-color: #D4A5A5; }
-    .card-optimist { border-left-color: #B5C9B5; }
-    .card-moderator { border-left-color: #C5B5D4; }
-    .card-philosopher { border-left-color: #D4B5A5; }
-    .card-futurist { border-left-color: #A5C9D4; }
-    .card-data { border-left-color: #A5D4C0; }
-    .card-ethicist { border-left-color: #D4A5C0; }
-
-    .agent-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 10px;
-        font-weight: 500;
-        color: var(--warm-charcoal);
-    }
-
-    .agent-message {
-        font-family: 'Inter', sans-serif;
-        font-weight: 350;
-        font-size: 15px;
-        line-height: 1.5;
-        color: var(--warm-charcoal);
-        padding-left: 6px;
-    }
-
-    .round-separator {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        margin: 8px 0 16px;
-    }
-    .separator-line {
-        flex: 1;
-        height: 0.5px;
-        background: linear-gradient(90deg, transparent, var(--taupe), transparent);
-    }
-    .dot-sequence {
-        font-size: 10px;
-        letter-spacing: 4px;
-        color: var(--rose-gold);
-    }
-
-    /* ----- LAYER 3: Floating Action Dock ----- */
-    .action-dock {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-left: 32px;
-        width: calc(100% - 96px);
-        max-width: 380px;
-        height: 60px;
-        background: rgba(255, 255, 255, 0.65);
-        backdrop-filter: blur(30px);
-        -webkit-backdrop-filter: blur(30px);
-        border-radius: 60px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
         border: 0.5px solid var(--glass-border);
-        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.05), 0 0 0 1px rgba(255,255,255,0.5) inset;
-        display: flex;
-        align-items: center;
-        justify-content: space-evenly;
-        padding: 0 8px;
-        z-index: 200;
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
     }
 
-    .dock-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 48px;
-        background: transparent;
-        border: none;
-        font-size: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.15s;
-        color: var(--warm-charcoal);
-    }
-    .dock-icon:active {
-        background: rgba(255,255,255,0.5);
-        transform: scale(0.9);
-    }
-
-    /* ----- Popover / Modal (Stats hidden behind (i)) ----- */
-    .stats-popover {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(40px);
-        border-radius: 36px;
-        padding: 20px;
-        border: 0.5px solid var(--glass-border);
-    }
-
-    /* ----- Streamlit Overrides ----- */
-    .stButton > button {
-        background: transparent;
-        border: none;
-        font-size: 24px;
-        padding: 12px;
-    }
     .stTextInput > div > div > input {
-        background: rgba(255,255,255,0.5);
-        border: 0.5px solid var(--glass-border);
-        border-radius: 40px;
-        padding: 16px 20px;
-        font-family: 'Inter', sans-serif;
-        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.6) !important;
+        backdrop-filter: blur(15px);
+        border: 0.5px solid var(--glass-border) !important;
+        border-radius: 60px !important;
+        padding: 1rem 1.5rem !important;
+        font-size: 1.1rem !important;
+        color: var(--warm-charcoal) !important;
+        text-align: center;
     }
+
     .stSelectbox > div > div {
-        background: transparent !important;
-        border: none !important;
+        background: rgba(255, 255, 255, 0.6) !important;
+        backdrop-filter: blur(15px);
+        border: 0.5px solid var(--glass-border) !important;
+        border-radius: 60px !important;
     }
-    [data-testid="stExpander"] details {
-        background: transparent;
+
+    .stButton > button {
+        background: linear-gradient(145deg, var(--rose-gold), var(--champagne));
         border: none;
+        border-radius: 60px;
+        font-weight: 500;
+        color: white;
+        box-shadow: 0 8px 20px -8px rgba(212,165,165,0.4);
+        width: 100%;
+    }
+
+    .debate-card {
+        background: rgba(255, 255, 255, 0.45);
+        backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 0.8rem;
+        border-left: 5px solid;
+    }
+
+    .verdict-box {
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(20px);
+        border-radius: 28px;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        border-left: 5px solid var(--rose-gold);
+        font-family: 'Courier Prime', monospace;
     }
 </style>
 """, unsafe_allow_html=True)
-# --- Session State & Constants ---
+
+# --- Session State ---
 if "agent_stats" not in st.session_state:
     st.session_state.agent_stats = {
         "Harsh": {"wins": 0, "losses": 0}, "Jayant": {"wins": 0, "losses": 0},
-        "Philosopher": {"wins": 0, "losses": 0}, "Futurist": {"wins": 0, "losses": 0},
-        "DataScientist": {"wins": 0, "losses": 0}, "Ethicist": {"wins": 0, "losses": 0},
+        "Ritik": {"wins": 0, "losses": 0}, "Kavya": {"wins": 0, "losses": 0},
+        "Nish": {"wins": 0, "losses": 0}, "Teju": {"wins": 0, "losses": 0},
+        "Shivam": {"wins": 0, "losses": 0}, "Philosopher": {"wins": 0, "losses": 0},
+        "Futurist": {"wins": 0, "losses": 0}, "DataScientist": {"wins": 0, "losses": 0},
+        "Ethicist": {"wins": 0, "losses": 0}, "Ahany": {"wins": 0, "losses": 0},
     }
-if "current_topic" not in st.session_state:
-    st.session_state.current_topic = "Should AI have a conscience?"
 if "global_arguments" not in st.session_state:
     st.session_state.global_arguments = []
 
-# Models
-AVAILABLE_MODELS = {
-    "🤍 Groq": {"provider": "groq", "model": "llama-3.3-70b-versatile", "type": "openai", "base_url": "https://api.groq.com/openai/v1"},
-    "🤍 DeepSeek": {"provider": "deepseek", "model": "deepseek-chat", "type": "openai", "base_url": "https://api.deepseek.com"},
+# --- Models Configuration ---
+PROVIDERS = {
+    "🤍 Auto": {"provider": "auto", "model": None, "type": None, "base_url": None},
+    "Groq (Llama 3.3)": {"provider": "groq", "model": "llama-3.3-70b-versatile", "type": "openai", "base_url": "https://api.groq.com/openai/v1"},
+    "DeepSeek": {"provider": "deepseek", "model": "deepseek-chat", "type": "openai", "base_url": "https://api.deepseek.com"},
+    "Mistral (Small 4)": {"provider": "mistral", "model": "mistral-small-4", "type": "openai", "base_url": "https://api.mistral.ai/v1"},
+    "Cerebras (Llama 3.3)": {"provider": "cerebras", "model": "llama-3.3-70b", "type": "openai", "base_url": "https://api.cerebras.ai/v1"},
+    "OpenRouter (Auto)": {"provider": "openrouter", "model": "openrouter/auto", "type": "openai", "base_url": "https://openrouter.ai/api/v1"},
+    "Google (Gemma 4)": {"provider": "google", "model": "gemma-4-26b-it", "type": "google", "base_url": None},
 }
+
 PROVIDER_API_KEYS = {
     "groq": st.secrets.get("GROQ_API_KEY", ""),
     "deepseek": st.secrets.get("DEEPSEEK_API_KEY", ""),
+    "mistral": st.secrets.get("MISTRAL_API_KEY", ""),
+    "cerebras": st.secrets.get("CEREBRAS_API_KEY", ""),
+    "openrouter": st.secrets.get("OPENROUTER_API_KEY", ""),
+    "google": st.secrets.get("GEMINI_API_KEY", ""),
 }
 
-def get_client(selected_model):
-    config = AVAILABLE_MODELS[selected_model]
-    key = PROVIDER_API_KEYS[config["provider"]]
-    from openai import OpenAI
-    return OpenAI(api_key=key, base_url=config["base_url"]), config["model"]
+# Auto model keywords mapping
+MODEL_KEYWORDS = {
+    "philosoph": ["Mistral (Small 4)"],
+    "ethics": ["Mistral (Small 4)"],
+    "moral": ["Mistral (Small 4)"],
+    "tech": ["Groq (Llama 3.3)"],
+    "future": ["Groq (Llama 3.3)"],
+    "data": ["Cerebras (Llama 3.3)"],
+    "science": ["Cerebras (Llama 3.3)"],
+    "conspiracy": ["DeepSeek"],
+    "policy": ["OpenRouter (Auto)"],
+    "law": ["OpenRouter (Auto)"],
+    "google": ["Google (Gemma 4)"],
+    "ai": ["Groq (Llama 3.3)"],
+}
 
-# --- Agents ---
+def resolve_auto_model(topic: str) -> str:
+    """Select best model based on topic keywords."""
+    topic_lower = topic.lower()
+    for keyword, models in MODEL_KEYWORDS.items():
+        if keyword in topic_lower:
+            return models[0]
+    return "Groq (Llama 3.3)"  # default
+
+def get_actual_model_config(selected_display: str, topic: str = ""):
+    """Resolve Auto if needed, then return config with valid API key."""
+    if selected_display == "🤍 Auto":
+        selected_display = resolve_auto_model(topic)
+        st.toast(f"🤍 Auto selected: {selected_display}", icon="✨")
+    
+    config = PROVIDERS[selected_display].copy()
+    provider = config["provider"]
+    config["api_key"] = PROVIDER_API_KEYS.get(provider, "")
+    if not config["api_key"]:
+        # Try fallback chain
+        for fallback in ["groq", "deepseek", "mistral", "cerebras", "openrouter", "google"]:
+            key = PROVIDER_API_KEYS.get(fallback, "")
+            if key:
+                config = PROVIDERS.get(next(k for k,v in PROVIDERS.items() if v["provider"]==fallback)).copy()
+                config["api_key"] = key
+                st.toast(f"⚠️ Fallback to {fallback}", icon="⚠️")
+                return config
+        st.error("No API keys configured.")
+        st.stop()
+    return config
+
+def get_client(config):
+    if config["type"] == "google":
+        import google.generativeai as genai
+        genai.configure(api_key=config["api_key"])
+        return ("google", genai.GenerativeModel(config["model"]), None)
+    else:
+        from openai import OpenAI
+        client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
+        return ("openai", None, client)
+
+def generate_response(prompt, system_prompt, client_tuple, model_name):
+    type_, google_model, openai_client = client_tuple
+    if type_ == "google":
+        full = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        return google_model.generate_content(full).text
+    else:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        resp = openai_client.chat.completions.create(
+            model=model_name, messages=messages, temperature=0.7, max_tokens=250
+        )
+        return resp.choices[0].message.content.strip()
+# --- Helper Functions ---
+def is_repetition(text, threshold=0.6):
+    words = set(text.lower().split())
+    for past in st.session_state.global_arguments[-12:]:
+        past_words = set(past.lower().split())
+        if len(words & past_words) / max(len(words), 1) > threshold:
+            return True
+    return False
+
+def add_global_memory(agent, text):
+    st.session_state.global_arguments.append(f"{agent}: {text[:200]}")
+
+# --- 12 Agents ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-    def speak(self, topic, last_msg, round_num, client, model):
-        history = "\n".join(self.history[-2:])
-        prompt = f"You are {self.name} ({self.role}). {self.personality}\nDebate round {round_num} on '{topic}'.\nHistory: {history}\nLast: '{last_msg}'\nRespond in 2-4 sentences with Claim/Reasoning."
-        resp = client.chat.completions.create(model=model, messages=[{"role":"user","content":prompt}], temperature=0.7, max_tokens=200)
-        reply = resp.choices[0].message.content
+    def speak(self, topic, last_msg, round_num, client_tuple, model_name):
+        history = "\n".join(self.history[-3:]) or "No previous chat."
+        system_prompt = f"You are {self.name} ({self.role}). {self.personality}"
+        prompt = f"""Debate round {round_num} on: "{topic}"
+**Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
+Avoid repeating. History: {history}
+Last said: "{last_msg}"
+"""
+        for _ in range(2):
+            reply = generate_response(prompt, system_prompt, client_tuple, model_name)
+            if not is_repetition(reply):
+                break
+            prompt += "\nWARNING: Repeated. New angle required."
+        else:
+            reply = "I've made my point sufficiently."
+        self.history.append(reply)
+        add_global_memory(self.name, reply)
+        return reply
+
+class Moderator(Agent):
+    def speak(self, topic, last_msg, round_num, client_tuple, model_name):
+        history = "\n".join(self.history[-5:]) or "No debate yet."
+        system_prompt = f"You are {self.name}, the moderator. Be sharp and impartial."
+        prompt = f"Summarize key points, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
+        reply = generate_response(prompt, system_prompt, client_tuple, model_name)
         self.history.append(reply)
         return reply
 
-def create_panel():
+def create_full_panel():
     return [
-        Agent("Harsh", "Skeptic", "Finds flaws.", "🔴", "card-skeptic"),
-        Agent("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-        Agent("Philosopher", "Philosopher", "Ethical lens.", "🟤", "card-philosopher"),
-        Agent("Futurist", "Futurist", "Long-term view.", "🔮", "card-futurist"),
-        Agent("DataScientist", "Data Sci", "Evidence only.", "📊", "card-data"),
-        Agent("Ethicist", "Ethicist", "Moral compass.", "⚖️", "card-ethicist"),
+        Agent("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
+        Agent("Jayant", "Optimist", "Sees opportunity and growth.", "🟢", "card-optimist"),
+        Moderator("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic"),
+        Agent("Ritik", "Policy Advisor", "Government and regulation lens.", "🟡", "card-policy"),
+        Agent("Kavya", "Retail Investor", "Everyday person perspective.", "🟣", "card-optimist"),
+        Agent("Nish", "Scientist", "Empirical evidence only.", "🟠", "card-data"),
+        Agent("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
+        Agent("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
+        Agent("Philosopher", "Philosopher", "Ethical and historical context.", "🟤", "card-philosopher"),
+        Agent("Futurist", "Futurist", "50-year perspective.", "🔮", "card-futurist"),
+        Agent("DataScientist", "Data Scientist", "Statistics and evidence.", "📊", "card-data"),
+        Agent("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
     ]
 
-# --- Render Left Rail (Persistent) ---
-st.markdown("""
-<div class="left-rail">
-    <div class="rail-logo">NYX</div>
-    <div class="agent-orbs">
-        <div class="orb">🔴</div><div class="orb">🟢</div><div class="orb">🟤</div>
-        <div class="orb">🔮</div><div class="orb">📊</div><div class="orb">⚖️</div>
-    </div>
-    <div class="live-badge">
-        <span class="live-dot"></span>
-        <span>LIVE</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+def judge_debate(topic, messages, client_tuple, model_name):
+    debate_text = "\n".join(messages[-20:])
+    system_prompt = "You are the JUDGE. Deliver a fair, detailed verdict."
+    prompt = f"""Debate: "{topic}"\nTranscript: {debate_text}\nProvide: Winner name, 2-sentence reasoning, and final takeaway."""
+    return generate_response(prompt, system_prompt, client_tuple, model_name)
 
-# --- Main Stage Layout ---
-st.markdown('<div class="main-stage">', unsafe_allow_html=True)
+def generate_pdf(topic, log, verdict, winner):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Nyx Protocol Transcript", ln=1)
+    pdf.cell(200, 10, txt=f"Topic: {topic}", ln=1)
+    pdf.ln(5)
+    for msg in log:
+        clean = msg.encode('latin-1','replace').decode('latin-1')
+        pdf.multi_cell(0, 8, txt=clean)
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
+    pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
+    return pdf.output(dest='S').encode('latin-1')
 
-# Topic Card
-st.markdown(f'<div class="topic-card"><div class="topic-text">{st.session_state.current_topic}</div></div>', unsafe_allow_html=True)
+# --- UI ---
+st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center; opacity:0.6; margin-bottom:1.5rem;">— AI DEBATE PROTOCOL —</div>', unsafe_allow_html=True)
 
-# Model & Settings (Hidden in Expander)
-with st.expander("⚙️", expanded=False):
-    selected_model = st.selectbox("Model", list(AVAILABLE_MODELS.keys()))
-    rounds = st.select_slider("Rounds", [2,3,4], 3)
-    if st.button("🎲 New Topic"):
-        topics = ["Is AI art real art?", "Should robots have rights?", "Will AI cure loneliness?", "Is crypto the future?"]
-        st.session_state.current_topic = secrets.choice(topics)
-        st.rerun()
+with st.container():
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
+    topic = st.text_input("Debate Topic", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+    
+    col1, col2 = st.columns([3, 2])
+    with col1:
+        selected_model = st.selectbox("Model", list(PROVIDERS.keys()), index=0)
+    with col2:
+        rounds = st.select_slider("Rounds", options=[2, 3, 4, 5], value=3)
+    
+    show_args = st.checkbox("Show full debate arguments", value=True)
+    
+    launch = st.button("▶ Initiate Debate", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Debate trigger (we use the dock button instead)
-debate_placeholder = st.empty()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Floating Action Dock (Footer) ---
-st.markdown("""
-<div class="action-dock">
-    <div class="dock-icon" id="shuffle-topic">↻</div>
-    <div class="dock-icon" id="launch-debate">▶</div>
-    <div class="dock-icon" id="share-sheet">⎘</div>
-</div>
-""", unsafe_allow_html=True)
-
-# Dock interactions via Streamlit buttons (hidden but triggered by custom JS not possible, so we use columns in dock style)
-# We'll use a horizontal layout that mimics the dock
-dock_cols = st.columns([1,1,1])
-with dock_cols[0]:
-    if st.button("↻", key="shuffle", help="New topic", use_container_width=True):
-        topics = ["Is AI art real art?", "Should robots have rights?", "Will AI cure loneliness?"]
-        st.session_state.current_topic = secrets.choice(topics)
-        st.rerun()
-with dock_cols[1]:
-    launch_btn = st.button("▶", key="launch", help="Start debate", use_container_width=True)
-with dock_cols[2]:
-    if st.button("⎘", key="share", help="Share", use_container_width=True):
-        st.info("📋 Verdict copied! (Share sheet simulation)")
-
-# --- Debate Execution (when launch is clicked) ---
-if launch_btn:
-    client, model = get_client(selected_model)
-    agents = create_panel()
+if launch and topic:
+    # Resolve model
+    config = get_actual_model_config(selected_model, topic)
+    client_tuple = get_client(config)
+    model_name = config["model"]
+    
+    agents = create_full_panel()
     log = []
     last_msg = "Let's begin."
+    winner = None
+    verdict = ""
     
-    with debate_placeholder.container():
-        for r in range(1, rounds+1):
-            st.markdown(f'<div class="round-separator"><span class="separator-line"></span><span class="dot-sequence">{"●"*r}{"○"*(rounds-r)}</span><span class="separator-line"></span></div>', unsafe_allow_html=True)
-            for agent in agents[:4]:  # Show first 4 agents per round to keep it compact
-                with st.spinner(f"{agent.name}"):
-                    reply = agent.speak(st.session_state.current_topic, last_msg, r, client, model)
+    if show_args:
+        st.markdown("### ⚔️ THE ARENA")
+    
+    for r in range(1, rounds+1):
+        if show_args:
+            st.markdown(f"**Round {r}**")
+        round_msgs = []
+        order = [a for a in agents if a.name != "Ahany"]
+        for agent in order:
+            if show_args:
+                with st.spinner(f"{agent.name} speaking..."):
+                    reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
                 st.markdown(f"""
                 <div class="debate-card {agent.card_class}">
-                    <div class="agent-header"><span>{agent.avatar}</span> {agent.name} · {agent.role}</div>
+                    <div class="agent-name">{agent.avatar} {agent.name} · {agent.role}</div>
                     <div class="agent-message">{reply}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                last_msg = reply
-                time.sleep(0.8)
+            else:
+                reply = agent.speak(topic, last_msg, r, client_tuple, model_name)
+            round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
+            last_msg = reply
+            time.sleep(0.6)
         
-        # Verdict
-        judge_prompt = f"Debate on '{st.session_state.current_topic}'. Transcript: {log[-200:]}. Give winner and 2-sentence reasoning."
-        verdict_resp = client.chat.completions.create(model=model, messages=[{"role":"user","content":judge_prompt}], temperature=0.5)
-        verdict = verdict_resp.choices[0].message.content
-        st.markdown(f"""
-        <div class="debate-card" style="border-left-color: #D4A5A5;">
-            <div class="agent-header">⚖️ JUDGMENT</div>
-            <div class="agent-message" style="font-family: 'Courier Prime', monospace;">{verdict}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Stats hidden in popover (simulated)
-        with st.expander("📊 Agent Insights", expanded=False):
-            for agent in agents:
-                st.text(f"{agent.name}: {random.randint(1,5)} wins")
+        mod = next(a for a in agents if a.name == "Ahany")
+        mod_reply = mod.speak(topic, last_msg, r, client_tuple, model_name)
+        if show_args:
+            st.markdown(f"""
+            <div class="debate-card" style="border-left-color:#D4A5A5;">
+                <div class="agent-name">{mod.avatar} {mod.name} · Moderator</div>
+                <div class="agent-message">{mod_reply}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
+        last_msg = mod_reply
+        log.append("\n".join(round_msgs))
+    
+    with st.spinner("Judgment in progress..."):
+        verdict = judge_debate(topic, log, client_tuple, model_name)
+    match = re.search(r"Winner:?\s*(\w+)", verdict, re.IGNORECASE)
+    winner = match.group(1) if match else "Unknown"
+    
+    # Update stats
+    for agent in st.session_state.agent_stats:
+        if agent == winner:
+            st.session_state.agent_stats[agent]["wins"] += 1
+        else:
+            st.session_state.agent_stats[agent]["losses"] += 1
+    
+    st.markdown(f"""
+    <div class="verdict-box">
+        <h3>🏆 {winner}</h3>
+        <p>{verdict}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Stats expander
+    with st.expander("📊 Agent Win Rates"):
+        for agent, s in st.session_state.agent_stats.items():
+            total = s['wins']+s['losses']
+            rate = f"{s['wins']/total*100:.0f}%" if total else "0%"
+            st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
+    
+    # Share & PDF
+    share = f"Nyx Protocol: {winner} wins on '{topic}'"
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Tweet</button></a>', unsafe_allow_html=True)
+    with col_b:
+        pdf = generate_pdf(topic, log, verdict, winner)
+        st.download_button("📄 PDF", pdf, f"nyx_{datetime.now():%Y%m%d_%H%M}.pdf")
 
-# Remove Streamlit default padding
-st.markdown('<style>div.block-container{padding:0;}</style>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6;">✨ Harsh Dubey · Nyx Protocol ✨</div>', unsafe_allow_html=True)
