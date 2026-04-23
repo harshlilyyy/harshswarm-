@@ -17,29 +17,29 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Professional Dark Theme with Subtle Accents ---
+# --- Light Glassmorphism Theme (High Visibility) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     :root {
-        --bg-deep: #0a0a0f;
-        --bg-card: rgba(18, 20, 28, 0.9);
-        --border-glow: rgba(168, 85, 247, 0.3);
+        --bg-light: #f8fafc;
+        --glass-white: rgba(255, 255, 255, 0.75);
+        --glass-border: rgba(168, 85, 247, 0.3);
         --accent-purple: #a855f7;
         --accent-cyan: #06b6d4;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
+        --text-dark: #1e293b;
+        --text-muted: #475569;
     }
 
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
-        background: var(--bg-deep);
-        color: var(--text-primary);
+        background: var(--bg-light);
+        color: var(--text-dark);
     }
 
     .stApp {
-        background: radial-gradient(circle at 20% 30%, #1a1025, #0a0a0f 80%);
+        background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
     }
 
     .main .block-container {
@@ -48,7 +48,7 @@ st.markdown("""
     }
 
     h1 {
-        background: linear-gradient(135deg, #a855f7 0%, #06b6d4 100%);
+        background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 700 !important;
@@ -61,172 +61,167 @@ st.markdown("""
     .hero-subtitle {
         text-align: center;
         font-size: 1.2rem;
-        color: var(--text-secondary);
+        color: var(--text-muted);
         margin-bottom: 2rem;
     }
 
+    /* Sidebar - Dark Glass */
     [data-testid="stSidebar"] {
-        background: rgba(15, 17, 22, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         backdrop-filter: blur(12px);
-        border-right: 1px solid var(--border-glow);
+        -webkit-backdrop-filter: blur(12px);
+        border-right: 1px solid var(--glass-border);
+    }
+    [data-testid="stSidebar"] * {
+        color: #f1f5f9 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+        color: white !important;
     }
 
+    /* Chat Messages - White Glass */
     [data-testid="stChatMessage"] {
-        background: var(--bg-card);
-        border-radius: 20px;
+        background: var(--glass-white);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 24px;
         padding: 1.5rem 1.8rem;
         margin-bottom: 1.25rem;
         border-left: 6px solid;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        color: var(--text-dark);
     }
 
     [data-testid="stChatMessage"]:hover {
         transform: translateY(-3px);
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
     }
 
+    /* Inputs - White with dark text */
+    .stTextArea textarea, .stSelectbox > div > div {
+        background: rgba(255, 255, 255, 0.9) !important;
+        border: 1px solid var(--glass-border) !important;
+        border-radius: 16px !important;
+        color: var(--text-dark) !important;
+        backdrop-filter: blur(8px);
+    }
+
+    .stTextArea textarea:focus {
+        border-color: var(--accent-purple) !important;
+        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2) !important;
+    }
+
+    /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #a855f7 0%, #06b6d4 100%);
+        background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 100%);
         color: white;
         font-weight: 600;
         border-radius: 60px;
         border: none;
         padding: 0.75rem 2rem;
-        font-size: 1.1rem;
         box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
     }
 
     .verdict-box {
-        background: var(--bg-card);
+        background: var(--glass-white);
+        backdrop-filter: blur(12px);
         border-radius: 24px;
         padding: 2rem;
         margin: 2rem 0;
-        border: 1px solid var(--border-glow);
-    }
-
-    .stTextArea textarea {
-        background: var(--bg-card);
-        border: 1px solid var(--border-glow);
-        border-radius: 16px;
-        color: var(--text-primary);
-        padding: 1rem;
-    }
-
-    .stTextArea textarea:focus {
-        border-color: var(--accent-purple);
-        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+        border: 1px solid var(--glass-border);
+        color: var(--text-dark);
     }
 
     .stProgress > div > div {
-        background: linear-gradient(90deg, #a855f7, #06b6d4);
+        background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
     }
 
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #1a1a2e; }
-    ::-webkit-scrollbar-thumb { background: #a855f7; border-radius: 10px; }
+    /* Dataframe / Scoreboard */
+    [data-testid="stDataFrame"] {
+        background: var(--glass-white);
+        border-radius: 16px;
+        padding: 0.5rem;
+        border: 1px solid var(--glass-border);
+    }
 </style>
 """, unsafe_allow_html=True)
-# --- Expanded Multi-Model Router ---
-MODEL_CHAIN = [
-    {
-        "provider": "groq",
-        "model": "llama-3.3-70b-versatile",
-        "api_key": st.secrets.get("GROQ_API_KEY", ""),
-        "base_url": "https://api.groq.com/openai/v1",
-        "type": "openai"
-    },
-    {
-        "provider": "deepseek",
-        "model": "deepseek-chat",
-        "api_key": st.secrets.get("DEEPSEEK_API_KEY", ""),
-        "base_url": "https://api.deepseek.com",
-        "type": "openai"
-    },
-    {
-        "provider": "mistral",
-        "model": "mistral-small-4",
-        "api_key": st.secrets.get("MISTRAL_API_KEY", ""),
-        "base_url": "https://api.mistral.ai/v1",
-        "type": "openai"
-    },
-    {
-        "provider": "cerebras",
-        "model": "llama-3.3-70b",
-        "api_key": st.secrets.get("CEREBRAS_API_KEY", ""),
-        "base_url": "https://api.cerebras.ai/v1",
-        "type": "openai"
-    },
-    {
-        "provider": "openrouter",
-        "model": "openrouter/auto",
-        "api_key": st.secrets.get("OPENROUTER_API_KEY", ""),
-        "base_url": "https://openrouter.ai/api/v1",
-        "type": "openai"
-    },
-    {
-        "provider": "google",
-        "model": "gemma-4-26b-it",
-        "api_key": st.secrets.get("GEMINI_API_KEY", ""),
-        "base_url": None,
-        "type": "google"
-    },
-]
+# --- Available Models for Manual Selection ---
+AVAILABLE_MODELS = {
+    "Groq (Llama 3.3 70B)": {"provider": "groq", "model": "llama-3.3-70b-versatile", "type": "openai", "base_url": "https://api.groq.com/openai/v1"},
+    "DeepSeek (DeepSeek-Chat)": {"provider": "deepseek", "model": "deepseek-chat", "type": "openai", "base_url": "https://api.deepseek.com"},
+    "Mistral (Mistral Small 4)": {"provider": "mistral", "model": "mistral-small-4", "type": "openai", "base_url": "https://api.mistral.ai/v1"},
+    "Cerebras (Llama 3.3 70B)": {"provider": "cerebras", "model": "llama-3.3-70b", "type": "openai", "base_url": "https://api.cerebras.ai/v1"},
+    "OpenRouter (Auto)": {"provider": "openrouter", "model": "openrouter/auto", "type": "openai", "base_url": "https://openrouter.ai/api/v1"},
+    "Google (Gemma 4 26B)": {"provider": "google", "model": "gemma-4-26b-it", "type": "google", "base_url": None},
+}
 
-def get_working_model():
-    for config in MODEL_CHAIN:
+# --- Sidebar Model Selector ---
+with st.sidebar:
+    st.markdown("### 🤖 Model Selection")
+    selected_model_name = st.selectbox(
+        "Choose AI provider",
+        list(AVAILABLE_MODELS.keys()),
+        index=0
+    )
+    manual_override = st.checkbox("Use selected model (override auto‑fallback)", value=True)
+
+# --- API Key Mapping ---
+PROVIDER_API_KEYS = {
+    "groq": st.secrets.get("GROQ_API_KEY", ""),
+    "deepseek": st.secrets.get("DEEPSEEK_API_KEY", ""),
+    "mistral": st.secrets.get("MISTRAL_API_KEY", ""),
+    "cerebras": st.secrets.get("CEREBRAS_API_KEY", ""),
+    "openrouter": st.secrets.get("OPENROUTER_API_KEY", ""),
+    "google": st.secrets.get("GEMINI_API_KEY", ""),
+}
+
+def get_model_config():
+    if manual_override:
+        config = AVAILABLE_MODELS[selected_model_name].copy()
+        config["api_key"] = PROVIDER_API_KEYS.get(config["provider"], "")
         if not config["api_key"]:
-            st.sidebar.warning(f"⚠️ {config['provider']} API key missing")
-            continue
-        try:
-            if config["type"] == "google":
-                import google.generativeai as genai
-                genai.configure(api_key=config["api_key"])
-                model = genai.GenerativeModel(config["model"])
-                model.generate_content("test", request_options={"timeout": 5})
-            st.sidebar.success(f"✅ Active: {config['provider']} ({config['model']})")
-            return config
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ {config['provider']} failed: {str(e)[:40]}")
-            continue
-    st.error("🚨 No working models available. Check your API keys in Secrets.")
-    st.stop()
+            st.sidebar.error(f"❌ Missing API key for {config['provider']}")
+            st.stop()
+        return config
+    else:
+        # Auto‑fallback chain (same as before)
+        for provider, model in [("groq", "llama-3.3-70b-versatile"), ("deepseek", "deepseek-chat"),
+                                ("mistral", "mistral-small-4"), ("cerebras", "llama-3.3-70b"),
+                                ("openrouter", "openrouter/auto"), ("google", "gemma-4-26b-it")]:
+            key = PROVIDER_API_KEYS.get(provider, "")
+            if key:
+                try:
+                    if provider == "google":
+                        import google.generativeai as genai
+                        genai.configure(api_key=key)
+                        genai.GenerativeModel(model).generate_content("test", request_options={"timeout": 5})
+                    return {"provider": provider, "model": model, "api_key": key, "type": "google" if provider=="google" else "openai",
+                            "base_url": AVAILABLE_MODELS.get(provider, {}).get("base_url")}
+                except: continue
+        st.error("No working models available.")
+        st.stop()
 
-ACTIVE_MODEL = get_working_model()
-
-if ACTIVE_MODEL["type"] == "google":
+MODEL_CONFIG = get_model_config()
+if MODEL_CONFIG["type"] == "google":
     import google.generativeai as genai
-    genai.configure(api_key=ACTIVE_MODEL["api_key"])
-    google_model = genai.GenerativeModel(ACTIVE_MODEL["model"])
+    genai.configure(api_key=MODEL_CONFIG["api_key"])
+    google_model = genai.GenerativeModel(MODEL_CONFIG["model"])
 else:
     from openai import OpenAI
-    client = OpenAI(
-        api_key=ACTIVE_MODEL["api_key"],
-        base_url=ACTIVE_MODEL["base_url"]
-    )
+    client = OpenAI(api_key=MODEL_CONFIG["api_key"], base_url=MODEL_CONFIG["base_url"])
 
 def generate_response(prompt, system_prompt=None):
-    if ACTIVE_MODEL["type"] == "google":
-        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-        response = google_model.generate_content(full_prompt)
-        return response.text
+    if MODEL_CONFIG["type"] == "google":
+        full = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        return google_model.generate_content(full).text
     else:
         messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+        if system_prompt: messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        response = client.chat.completions.create(
-            model=ACTIVE_MODEL["model"],
-            messages=messages,
-            temperature=0.7,
-            max_tokens=600
-        )
-        return response.choices[0].message.content
+        resp = client.chat.completions.create(model=MODEL_CONFIG["model"], messages=messages, temperature=0.7, max_tokens=600)
+        return resp.choices[0].message.content
 # --- Session State ---
 if "agent_stats" not in st.session_state:
     st.session_state.agent_stats = {
@@ -378,10 +373,10 @@ def generate_pdf(topic, log, verdict, winner):
     verdict_clean = verdict.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 10, txt=verdict_clean)
     return pdf.output(dest='S').encode('latin-1')
-# --- Sidebar ---
+# --- Sidebar (continued after model selector) ---
 with st.sidebar:
-    st.markdown("### 🌑 Nyx Protocol")
     st.markdown("---")
+    st.markdown("### 🌑 Nyx Protocol")
     st.markdown("### 🎲 Quantum Roll")
     if st.button("🌀 Generate Random Topic"):
         topic = secrets.choice(QUANTUM_TOPICS)
@@ -394,7 +389,7 @@ with st.sidebar:
     st.markdown("### ⚙️ Debate Settings")
     mode = st.selectbox("Mode", ["Quick (3 rounds)", "Standard (5 rounds)", "Deep (8 rounds)"])
     rounds = 3 if "Quick" in mode else 5 if "Standard" in mode else 8
-    extra = st.selectbox("Extra Agents", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], index=6)
+    extra = st.selectbox("Extra Agents", list(range(10)), index=6)
     st.markdown("---")
     st.markdown("### 📊 Agent Win Rates")
     for agent, stats in st.session_state.agent_stats.items():
@@ -412,13 +407,13 @@ col1, col2, col3 = st.columns([1, 3, 1])
 with col2:
     topic = st.text_area(
         "📰 **What should the panel debate?**",
-        value=st.session_state.quantum_topic,
+        value=st.session_state.get("quantum_topic", ""),
         height=120,
         placeholder="Enter a debate topic..."
     )
     start_btn = st.button("🚀 Launch Debate", use_container_width=True)
 
-# --- Debate Execution ---
+# --- Debate Execution (same as before) ---
 if start_btn and topic:
     st.session_state.global_arguments = []
     agents = create_agents(extra)
@@ -506,4 +501,3 @@ if start_btn and topic:
     # Footer
     st.markdown("---")
     st.markdown("<p style='text-align: center; color: #a855f7;'>🌑 Nyx Protocol · by Harsh Dubey</p>", unsafe_allow_html=True)
-
