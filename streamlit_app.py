@@ -1,20 +1,20 @@
 import streamlit as st
 import time
 import re
-import urllib.parse
+import json
+import os
 from datetime import datetime
-from fpdf import FPDF
 from openai import OpenAI
 
 # --- Page Config ---
 st.set_page_config(
     page_title="Nyx · by Harsh",
     page_icon="🤍",
-    layout="wide",                       # ← wide layout so sidebar has room
-    initial_sidebar_state="expanded"     # ← sidebar visible by default
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- Cosmic Pearl Glassmorphism CSS (sidebar now visible) ---
+# --- Cosmic Pearl Glassmorphism CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -39,7 +39,6 @@ st.markdown("""
         background: radial-gradient(circle at 50% 20%, rgba(232,213,181,0.25) 0%, var(--pearl) 80%);
     }
 
-    /* ===== Sidebar Frosted Glass ===== */
     [data-testid="stSidebar"] {
         background: rgba(255, 255, 255, 0.55) !important;
         backdrop-filter: blur(24px) !important;
@@ -47,19 +46,16 @@ st.markdown("""
         border-right: 0.5px solid var(--glass-border) !important;
         box-shadow: 4px 0 20px rgba(0,0,0,0.02) !important;
     }
-
     [data-testid="stSidebar"] .block-container {
         padding: 2rem 1.5rem !important;
     }
 
-    /* ===== Main content area ===== */
     .main .block-container {
         padding: 2rem 2rem 2rem 2rem !important;
         max-width: 900px !important;
         margin: 0 auto !important;
     }
 
-    /* Typography */
     .nyx-title {
         font-family: 'Playfair Display', serif;
         font-style: italic;
@@ -70,7 +66,6 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.2rem;
     }
-
     .subtitle {
         text-align: center;
         font-weight: 300;
@@ -78,8 +73,6 @@ st.markdown("""
         margin-bottom: 0.5rem;
         font-size: 1rem;
     }
-
-    /* Glass cards */
     .glass-card {
         background: rgba(255, 255, 255, 0.5);
         backdrop-filter: blur(20px);
@@ -90,7 +83,6 @@ st.markdown("""
         border: 0.5px solid var(--glass-border);
         box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
     }
-
     .stTextInput > div > div > input {
         background: rgba(255, 255, 255, 0.6) !important;
         backdrop-filter: blur(15px);
@@ -101,7 +93,6 @@ st.markdown("""
         color: var(--warm-charcoal) !important;
         text-align: center;
     }
-
     .stButton > button {
         background: linear-gradient(145deg, var(--rose-gold), var(--champagne));
         border: none;
@@ -112,8 +103,6 @@ st.markdown("""
         width: 100%;
         padding: 0.8rem 1.5rem;
     }
-
-    /* Debate cards */
     .debate-card {
         background: rgba(255, 255, 255, 0.45);
         backdrop-filter: blur(20px);
@@ -122,7 +111,6 @@ st.markdown("""
         margin-bottom: 0.8rem;
         border-left: 5px solid;
     }
-
     .card-skeptic { border-left-color: #D4A5A5; }
     .card-optimist { border-left-color: #B5C9B5; }
     .card-philosopher { border-left-color: #C5B5D4; }
@@ -135,7 +123,6 @@ st.markdown("""
     .card-economist { border-left-color: #C0B5D4; }
     .card-technologist { border-left-color: #A5D4D0; }
     .card-legal { border-left-color: #D4C0A5; }
-
     .verdict-box {
         background: rgba(255, 255, 255, 0.5);
         backdrop-filter: blur(20px);
@@ -145,7 +132,6 @@ st.markdown("""
         border-left: 5px solid var(--rose-gold);
         font-family: 'Courier Prime', monospace;
     }
-
     .round-tracker {
         text-align: center;
         margin: 0.5rem 0 0.8rem;
@@ -153,25 +139,25 @@ st.markdown("""
         font-size: 1.1rem;
         opacity: 0.8;
     }
+    .copy-btn {
+        background: transparent;
+        border: 1px solid var(--rose-gold);
+        border-radius: 20px;
+        padding: 0.3rem 1rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: var(--rose-gold);
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Session State (unchanged) ---
-if "agent_stats" not in st.session_state:
-    st.session_state.agent_stats = {
-        "Harsh": {"wins": 0, "losses": 0}, "Jayant": {"wins": 0, "losses": 0},
-        "Ritik": {"wins": 0, "losses": 0}, "Kavya": {"wins": 0, "losses": 0},
-        "Nish": {"wins": 0, "losses": 0}, "Teju": {"wins": 0, "losses": 0},
-        "Shivam": {"wins": 0, "losses": 0}, "Philosopher": {"wins": 0, "losses": 0},
-        "Futurist": {"wins": 0, "losses": 0}, "DataScientist": {"wins": 0, "losses": 0},
-        "Ethicist": {"wins": 0, "losses": 0}, "Ahany": {"wins": 0, "losses": 0},
-        "Psychologist": {"wins": 0, "losses": 0}, "Economist": {"wins": 0, "losses": 0},
-        "Technologist": {"wins": 0, "losses": 0}, "Legal Expert": {"wins": 0, "losses": 0},
-    }
+# --- Session State ---
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
+if "saved_history" not in st.session_state:
+    st.session_state.saved_history = []  # local lightweight history
 
-# --- API Providers (7 providers, Groq reserved for Judge) ---
+# --- API Providers (7 providers) ---
 PROVIDERS = [
     {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
     {"name": "DeepSeek", "key": st.secrets.get("DEEPSEEK_API_KEY"), "base": "https://api.deepseek.com", "model": "deepseek-chat"},
@@ -190,7 +176,6 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
         providers = PROVIDERS
-
     last_error = None
     for p in providers:
         if not p["key"]:
@@ -209,18 +194,14 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
                 if system:
                     messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-                resp = client.chat.completions.create(
-                    model=p["model"], messages=messages, temperature=0.7, max_tokens=250
-                )
+                resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.7, max_tokens=250)
                 return resp.choices[0].message.content.strip(), p["name"]
-        except Exception as e:
-            last_error = str(e)[:80]
+        except:
             continue
-
     if silent_fail:
-        return "Unable to generate response due to API limits.", "None"
+        return "Unable to generate response.", "None"
     else:
-        st.warning(f"⚠️ All providers temporarily unavailable. Last error: {last_error}")
+        st.warning("All providers temporarily unavailable.")
         return "Response unavailable.", "None"
 
 # --- 16 Agents ---
@@ -228,9 +209,10 @@ class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-    def speak(self, topic, last_msg, round_num, preferred_provider):
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone):
         history = "\n".join(self.history[-3:]) or "No previous chat."
-        system = f"You are {self.name} ({self.role}). {self.personality}"
+        tone_instr = f"Respond in a {tone} tone." if tone else ""
+        system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr}"
         prompt = f"""Debate round {round_num} on: "{topic}"
 **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
 History: {history}
@@ -241,7 +223,7 @@ Last: "{last_msg}"
         return reply
 
 class Moderator(Agent):
-    def speak(self, topic, last_msg, round_num, preferred_provider):
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone):
         history = "\n".join(self.history[-5:]) or "No debate yet."
         system = f"You are {self.name}, the moderator. Be sharp and impartial."
         prompt = f"Summarize, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
@@ -268,154 +250,133 @@ ALL_AGENTS = [
     ("Legal Expert", "Legal Expert", "Laws, regulations & precedents.", "⚖️", "card-legal"),
 ]
 
-def create_panel(count=4):
-    if count < 3:
-        count = 3
+def create_panel(selected_agents):
+    """Create panel from selected agent names. Always includes moderator at position 2."""
     agents = []
     moderator = None
-    for i, agent_data in enumerate(ALL_AGENTS):
-        if i >= count:
-            break
-        if len(agent_data) == 6 and agent_data[5]:
-            moderator = Moderator(agent_data[0], agent_data[1], agent_data[2], agent_data[3], agent_data[4])
+    for name, role, pers, av, card in ALL_AGENTS:
+        if name not in selected_agents:
+            continue
+        if name == "Ahany":
+            moderator = Moderator(name, role, pers, av, card)
         else:
-            agents.append(Agent(agent_data[0], agent_data[1], agent_data[2], agent_data[3], agent_data[4]))
+            agents.append(Agent(name, role, pers, av, card))
     if moderator and len(agents) >= 2:
         agents.insert(2, moderator)
     return agents
 
-def judge(topic, messages):
-    text = "\n".join(messages[-20:])
-    prompt = f"""You are the JUDGE of a debate. Analyze the transcript below.
-**Debate Topic:** "{topic}"
-**Transcript:** {text}
-
-Return your verdict in exactly this format:
-Winner: [Name]
-Reasoning: [2-3 sentences on why they won]
-Logic: [score 1-10]
-Evidence: [score 1-10]
-Rebuttal: [score 1-10]
-Persuasiveness: [score 1-10]
-Takeaway: [1 sentence final insight]
-"""
-    reply, _ = generate_with_fallback(prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
-    return reply
-
-def make_pdf(topic, log, verdict, winner):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Nyx Debate Transcript", ln=1)
-    pdf.cell(200, 10, txt=f"Topic: {topic}", ln=1)
-    pdf.ln(5)
-    for msg in log:
-        clean = msg.encode('latin-1','replace').decode('latin-1')
-        pdf.multi_cell(0, 8, txt=clean)
-    pdf.ln(5)
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
-    pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
-    return pdf.output(dest='S').encode('latin-1')
+# --- Swarm Mode Prompts ---
+SWARM_MODES = {
+    "Debate": "Argue your position strongly. Challenge the other side.",
+    "Council": "Collaborate towards a consensus recommendation.",
+    "Devil's Advocate": "If you are the Devil's Advocate, push back aggressively on every point.",
+    "Exploration": "Explore a unique angle independently.",
+    "Rapid Fire": "Keep arguments very short, 1-2 sentences.",
+}
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.markdown("### 🌑 Nyx")
     st.markdown("---")
-    
-    # Model selection
+
+    # Kernel / model selection
     st.markdown("### 🤖 Kernel")
-    model_choice = st.selectbox(
-        "Active model",
-        ["Groq", "DeepSeek", "Cerebras", "OpenRouter", "Mistral", "Google", "NVIDIA", "🤖 Auto"],
-        index=7  # default to Auto
+    model_choice = st.selectbox("Active model", ["Groq", "DeepSeek", "Cerebras", "OpenRouter", "Mistral", "Google", "NVIDIA", "🤖 Auto"], index=7)
+    preferred = None if model_choice == "🤖 Auto" else model_choice
+
+    st.markdown("---")
+    st.markdown("### ⚙️ Swarm Mode")
+    swarm_mode = st.selectbox("Mode", list(SWARM_MODES.keys()), index=0)
+
+    st.markdown("### 🎙️ Tone")
+    tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
+
+    st.markdown("### 🧑‍🤝‍🧑 Agent Picker")
+    # Preselect default 4 agents
+    default_agents = ["Harsh", "Jayant", "Ahany", "Nish"]
+    all_agent_names = [a[0] for a in ALL_AGENTS]
+    selected_agents = st.multiselect(
+        "Choose panelists",
+        options=all_agent_names,
+        default=default_agents,
+        help="Pick at least 3 agents (including moderator)."
     )
-    manual_override = model_choice != "🤖 Auto"
-    if manual_override:
-        preferred = model_choice
-    else:
-        preferred = None
-    
-    st.markdown("---")
-    
-    # Debate settings
-    st.markdown("### ⚙️ Debate settings")
-    rounds = st.select_slider("Depth (rounds)", options=[2, 3, 4], value=2)
-    agent_count = st.select_slider("Debaters", options=list(range(3, 17)), value=4)
-    
-    mode = st.radio("Speed vs. quality", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2)
-    if mode == "⚡ Fast":
-        if preferred is None:
-            preferred = "Cerebras"
-        else:
-            # If user manually selected a model, keep it; otherwise use Fast default
-            pass
-    elif mode == "🧠 Smart":
-        if preferred is None:
-            preferred = "DeepSeek"
-    
+    if len(selected_agents) < 3:
+        st.warning("Select at least 3 agents.")
+        st.stop()
+
+    rounds = st.select_slider("Depth (rounds)", options=[2, 3, 4], value=3)
     show_args = st.checkbox("Show arguments", value=True)
-    
+
     st.markdown("---")
-    
-    # Agent win rates
-    st.markdown("### 📊 Agent Win Rates")
-    for agent, s in st.session_state.agent_stats.items():
-        total = s['wins'] + s['losses']
-        rate = f"{s['wins']/total*100:.0f}%" if total > 0 else "0%"
-        st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
-    
+    st.markdown("### ⏳ Recent Debates")
+    if st.session_state.saved_history:
+        for i, past in enumerate(st.session_state.saved_history[-5:]):
+            if st.button(f"{past['topic'][:30]}... ({past['date']})", key=f"hist_{i}"):
+                st.session_state["replay_topic"] = past['topic']
+    else:
+        st.caption("No debates yet.")
+
     st.markdown("---")
-    st.markdown("<p style='text-align: center; color: var(--rose-gold);'>by Harsh Dubey</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:var(--rose-gold);'>by Harsh Dubey</p>", unsafe_allow_html=True)
 
 # ===================== MAIN AREA =====================
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">An AI debate arena. Ask anything.</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI Swarm Intelligence — Your problem, debated by experts.</div>', unsafe_allow_html=True)
 
-# Topic input card
+# Topic suggestions
+st.caption("💡 Try: Is remote work better than office? · Should I learn Python or JavaScript? · Is AI art real art?")
+
+# Topic input
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    topic = st.text_input("Ask anything...", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+    topic = st.text_input("Ask anything...", value="", placeholder="Ask anything...", label_visibility="collapsed")
     launch = st.button("Start Debate", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Debate execution
+# ===================== DEBATE EXECUTION =====================
 if launch and topic:
-    agents = create_panel(agent_count)
+    if len(selected_agents) < 3:
+        st.error("Please select at least 3 agents (including moderator).")
+        st.stop()
+
+    agents = create_panel(selected_agents)
     log = []
     last_msg = "Let's begin."
     winner = None
     verdict = ""
     used_provider = None
     fallback_warning = False
-    
+
     if show_args:
         st.markdown("### ⚔️ THE ARENA")
-    
+
     for r in range(1, rounds+1):
         st.markdown(f'<div class="round-tracker">Round {r} of {rounds}</div>', unsafe_allow_html=True)
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
-        
+
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
-        
+
         for agent in order:
-            reply, provider = generate_with_fallback(
-                f"Round {r} on '{topic}'. History: {last_msg}",
-                f"You are {agent.name} ({agent.role}). {agent.personality}",
-                preferred
-            )
+            # Thinking indicator
+            with st.spinner(f"{agent.name} is thinking..."):
+                reply, provider = generate_with_fallback(
+                    f"Round {r} on '{topic}'. History: {last_msg}",
+                    f"You are {agent.name} ({agent.role}). {agent.personality}. Mode: {swarm_mode}. Tone: {tone}.",
+                    preferred
+                )
             if used_provider and provider != used_provider:
                 fallback_warning = True
             used_provider = provider
-            
+
             if show_args:
                 with st.expander(f"{agent.avatar} {agent.name} · {agent.role}", expanded=True):
                     st.markdown(f'<div class="debate-card {agent.card_class}">{reply}</div>', unsafe_allow_html=True)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
             time.sleep(0.8)
-        
+
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
             mod_reply, provider = generate_with_fallback(
@@ -429,71 +390,78 @@ if launch and topic:
             round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
             last_msg = mod_reply
         log.append("\n".join(round_msgs))
-    
+
     st.session_state.debate_history = log
-    
+
     if used_provider:
         st.caption(f"⚙️ Powered by {used_provider}")
     if fallback_warning:
         st.warning("⚠️ The primary provider was unavailable; the debate automatically switched to a backup model.")
-    
+
     with st.spinner("Judgment..."):
-        verdict = judge(topic, log)
-    
-    winner_match = re.search(r"Winner:\s*(.+)", verdict)
-    reasoning_match = re.search(r"Reasoning:\s*(.+)", verdict)
-    logic_match = re.search(r"Logic:\s*(\d+)", verdict)
-    evidence_match = re.search(r"Evidence:\s*(\d+)", verdict)
-    rebuttal_match = re.search(r"Rebuttal:\s*(\d+)", verdict)
-    persuasiveness_match = re.search(r"Persuasiveness:\s*(\d+)", verdict)
-    
-    winner = winner_match.group(1).strip() if winner_match else "Unknown"
-    reasoning = reasoning_match.group(1).strip() if reasoning_match else "No detailed reasoning provided."
-    
-    for agent in st.session_state.agent_stats:
-        if agent == winner:
-            st.session_state.agent_stats[agent]["wins"] += 1
-        else:
-            st.session_state.agent_stats[agent]["losses"] += 1
-    
+        verdict_prompt = f"""You are the JUDGE of a debate. Swarm mode: {swarm_mode}. Tone: {tone}.
+Debate Topic: "{topic}"
+Transcript: {' '.join(log)}
+
+Return your verdict in exactly this format:
+Winner: [Name]
+Reasoning: [2-3 sentences]
+Confidence: [1-10]
+Recommended Action: [1 sentence]
+Logic: [1-10]
+Evidence: [1-10]
+Rebuttal: [1-10]
+Persuasiveness: [1-10]
+Takeaway: [1 sentence]
+"""
+        verdict, _ = generate_with_fallback(verdict_prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
+
+    # Parse verdict
+    def extract(pattern, text):
+        m = re.search(pattern, text)
+        return m.group(1).strip() if m else "?"
+
+    winner = extract(r"Winner:\s*(.+)", verdict)
+    reasoning = extract(r"Reasoning:\s*(.+)", verdict)
+    confidence = extract(r"Confidence:\s*(.+)", verdict)
+    action = extract(r"Recommended Action:\s*(.+)", verdict)
+    logic = extract(r"Logic:\s*(.+)", verdict)
+    evidence = extract(r"Evidence:\s*(.+)", verdict)
+    rebuttal = extract(r"Rebuttal:\s*(.+)", verdict)
+    persuasiveness = extract(r"Persuasiveness:\s*(.+)", verdict)
+    takeaway = extract(r"Takeaway:\s*(.+)", verdict)
+
+    # Actionable Verdict box
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
         <p><strong>Reasoning:</strong> {reasoning}</p>
+        <p><strong>Confidence:</strong> {confidence}/10</p>
+        <p><strong>Recommended Action:</strong> {action}</p>
         <hr style="margin:1rem 0;border:0.5px solid rgba(0,0,0,0.1);"/>
         <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.9rem;">
-            <div><strong>Logic:</strong> {logic_match.group(1) if logic_match else '?'}/10</div>
-            <div><strong>Evidence:</strong> {evidence_match.group(1) if evidence_match else '?'}/10</div>
-            <div><strong>Rebuttal:</strong> {rebuttal_match.group(1) if rebuttal_match else '?'}/10</div>
-            <div><strong>Persuasiveness:</strong> {persuasiveness_match.group(1) if persuasiveness_match else '?'}/10</div>
+            <div><strong>Logic:</strong> {logic}/10</div>
+            <div><strong>Evidence:</strong> {evidence}/10</div>
+            <div><strong>Rebuttal:</strong> {rebuttal}/10</div>
+            <div><strong>Persuasiveness:</strong> {persuasiveness}/10</div>
         </div>
+        <p style="margin-top:1rem;"><strong>Takeaway:</strong> {takeaway}</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Follow‑up
-    with st.container():
-        st.markdown('<div class="glass-card" style="margin-top:0.5rem;">', unsafe_allow_html=True)
-        st.markdown("**💬 Follow‑up**")
-        follow_up = st.text_input("Ask about the debate...", placeholder="e.g., 'Why that winner?'", key="follow_up", label_visibility="collapsed")
-        if st.button("Ask", key="ask_follow") and follow_up:
-            context = "\n".join(st.session_state.debate_history[-5:])
-            reply, _ = generate_with_fallback(f"Previous debate on '{topic}':\n{context}\n\nUser asks: {follow_up}\n\nRespond helpfully in 2-3 sentences.", "", "DeepSeek", silent_fail=True)
-            st.markdown(f"""
-            <div class="debate-card" style="border-left-color:#D4A5A5;">
-                <div class="agent-name">💬 Nyx</div>
-                <div class="agent-message">{reply}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Sharing
-    share = f"Nyx verdict: {winner} wins on '{topic}'"
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Tweet</button></a>', unsafe_allow_html=True)
-    with col_b:
-        pdf = make_pdf(topic, log, verdict, winner)
-        st.download_button("📄 PDF", pdf, f"nyx_{datetime.now():%Y%m%d_%H%M}.pdf")
+
+    # Copy verdict button
+    verdict_text = f"Nyx Verdict on '{topic}'\nWinner: {winner}\nReasoning: {reasoning}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
+    st.caption("📋 Verdict copied to clipboard" if st.button("📋 Copy Verdict") and st.session_state.__setitem__("clipboard", verdict_text) else "")
+
+    # Save to lightweight history
+    st.session_state.saved_history.append({
+        "topic": topic,
+        "winner": winner,
+        "date": datetime.now().strftime("%b %d"),
+        "verdict": verdict_text
+    })
+    if len(st.session_state.saved_history) > 10:
+        st.session_state.saved_history = st.session_state.saved_history[-10:]
 
 # --- Footer ---
 st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6; font-family:\'Playfair Display\',serif; font-style:italic;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
