@@ -10,11 +10,11 @@ from openai import OpenAI
 st.set_page_config(
     page_title="Nyx · by Harsh",
     page_icon="🤍",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="wide",                       # ← wide layout so sidebar has room
+    initial_sidebar_state="expanded"     # ← sidebar visible by default
 )
 
-# --- Cosmic Pearl Glassmorphism CSS ---
+# --- Cosmic Pearl Glassmorphism CSS (sidebar now visible) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -39,16 +39,27 @@ st.markdown("""
         background: radial-gradient(circle at 50% 20%, rgba(232,213,181,0.25) 0%, var(--pearl) 80%);
     }
 
+    /* ===== Sidebar Frosted Glass ===== */
+    [data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.55) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        border-right: 0.5px solid var(--glass-border) !important;
+        box-shadow: 4px 0 20px rgba(0,0,0,0.02) !important;
+    }
+
+    [data-testid="stSidebar"] .block-container {
+        padding: 2rem 1.5rem !important;
+    }
+
+    /* ===== Main content area ===== */
     .main .block-container {
-        padding: 2rem 1.25rem !important;
-        max-width: 640px !important;
+        padding: 2rem 2rem 2rem 2rem !important;
+        max-width: 900px !important;
         margin: 0 auto !important;
     }
 
-    [data-testid="stToolbar"], footer, [data-testid="stSidebar"] {
-        display: none !important;
-    }
-
+    /* Typography */
     .nyx-title {
         font-family: 'Playfair Display', serif;
         font-style: italic;
@@ -68,6 +79,7 @@ st.markdown("""
         font-size: 1rem;
     }
 
+    /* Glass cards */
     .glass-card {
         background: rgba(255, 255, 255, 0.5);
         backdrop-filter: blur(20px);
@@ -90,13 +102,6 @@ st.markdown("""
         text-align: center;
     }
 
-    .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.6) !important;
-        backdrop-filter: blur(15px);
-        border: 0.5px solid var(--glass-border) !important;
-        border-radius: 60px !important;
-    }
-
     .stButton > button {
         background: linear-gradient(145deg, var(--rose-gold), var(--champagne));
         border: none;
@@ -108,6 +113,7 @@ st.markdown("""
         padding: 0.8rem 1.5rem;
     }
 
+    /* Debate cards */
     .debate-card {
         background: rgba(255, 255, 255, 0.45);
         backdrop-filter: blur(20px);
@@ -150,7 +156,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Session State (expanded to 16 agents) ---
+# --- Session State (unchanged) ---
 if "agent_stats" not in st.session_state:
     st.session_state.agent_stats = {
         "Harsh": {"wins": 0, "losses": 0}, "Jayant": {"wins": 0, "losses": 0},
@@ -217,7 +223,7 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         st.warning(f"⚠️ All providers temporarily unavailable. Last error: {last_error}")
         return "Response unavailable.", "None"
 
-# --- 16 Agents (12 original + 4 new) ---
+# --- 16 Agents ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
@@ -246,7 +252,7 @@ class Moderator(Agent):
 ALL_AGENTS = [
     ("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
     ("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),   # True = is moderator
+    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),
     ("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
     ("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
     ("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
@@ -256,7 +262,6 @@ ALL_AGENTS = [
     ("Futurist", "Futurist", "50‑year perspective.", "🔮", "card-futurist"),
     ("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
     ("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
-    # Four new specialists
     ("Psychologist", "Psychologist", "Human behavior & cognitive biases.", "🧠", "card-psychologist"),
     ("Economist", "Economist", "Financial & market impact.", "📈", "card-economist"),
     ("Technologist", "Technologist", "Cutting‑edge tech feasibility.", "💻", "card-technologist"),
@@ -294,7 +299,6 @@ Rebuttal: [score 1-10]
 Persuasiveness: [score 1-10]
 Takeaway: [1 sentence final insight]
 """
-    # Reserve Groq exclusively for the judge
     reply, _ = generate_with_fallback(prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
     return reply
 
@@ -313,41 +317,69 @@ def make_pdf(topic, log, verdict, winner):
     pdf.cell(200, 10, txt=f"Winner: {winner}", ln=1)
     pdf.multi_cell(0, 8, txt=verdict.encode('latin-1','replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
-# --- UI: Header with Subtitle ---
-st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">An AI debate arena. Ask anything.</div>', unsafe_allow_html=True)
-
-# --- Compact Input Card ---
-with st.container():
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    topic = st.text_input("Ask anything...", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+# ===================== SIDEBAR =====================
+with st.sidebar:
+    st.markdown("### 🌑 Nyx")
+    st.markdown("---")
     
-    # Advanced settings (hidden by default)
-    with st.expander("⚙️ Customize debate", expanded=False):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.caption("Depth")
-            rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2, label_visibility="collapsed")
-        with col2:
-            st.caption("Debaters")
-            agent_count = st.select_slider("Agents", options=list(range(3, 17)), value=4, label_visibility="collapsed")
-        with col3:
-            st.caption("Speed vs. quality")
-            mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2, label_visibility="collapsed")
-        show_args = st.checkbox("Show arguments", value=True)
-    
-    launch = st.button("Start Debate", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Debate Execution ---
-if launch and topic:
-    if mode == "⚡ Fast":
-        preferred = "Cerebras"
-    elif mode == "🧠 Smart":
-        preferred = "DeepSeek"
+    # Model selection
+    st.markdown("### 🤖 Kernel")
+    model_choice = st.selectbox(
+        "Active model",
+        ["Groq", "DeepSeek", "Cerebras", "OpenRouter", "Mistral", "Google", "NVIDIA", "🤖 Auto"],
+        index=7  # default to Auto
+    )
+    manual_override = model_choice != "🤖 Auto"
+    if manual_override:
+        preferred = model_choice
     else:
         preferred = None
     
+    st.markdown("---")
+    
+    # Debate settings
+    st.markdown("### ⚙️ Debate settings")
+    rounds = st.select_slider("Depth (rounds)", options=[2, 3, 4], value=2)
+    agent_count = st.select_slider("Debaters", options=list(range(3, 17)), value=4)
+    
+    mode = st.radio("Speed vs. quality", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2)
+    if mode == "⚡ Fast":
+        if preferred is None:
+            preferred = "Cerebras"
+        else:
+            # If user manually selected a model, keep it; otherwise use Fast default
+            pass
+    elif mode == "🧠 Smart":
+        if preferred is None:
+            preferred = "DeepSeek"
+    
+    show_args = st.checkbox("Show arguments", value=True)
+    
+    st.markdown("---")
+    
+    # Agent win rates
+    st.markdown("### 📊 Agent Win Rates")
+    for agent, s in st.session_state.agent_stats.items():
+        total = s['wins'] + s['losses']
+        rate = f"{s['wins']/total*100:.0f}%" if total > 0 else "0%"
+        st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
+    
+    st.markdown("---")
+    st.markdown("<p style='text-align: center; color: var(--rose-gold);'>by Harsh Dubey</p>", unsafe_allow_html=True)
+
+# ===================== MAIN AREA =====================
+st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">An AI debate arena. Ask anything.</div>', unsafe_allow_html=True)
+
+# Topic input card
+with st.container():
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    topic = st.text_input("Ask anything...", value="Should AI have a conscience?", placeholder="Ask anything...", label_visibility="collapsed")
+    launch = st.button("Start Debate", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Debate execution
+if launch and topic:
     agents = create_panel(agent_count)
     log = []
     last_msg = "Let's begin."
@@ -364,7 +396,6 @@ if launch and topic:
         round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
         
-        # Persona chips
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
         
@@ -409,7 +440,6 @@ if launch and topic:
     with st.spinner("Judgment..."):
         verdict = judge(topic, log)
     
-    # Parse verdict into structured display
     winner_match = re.search(r"Winner:\s*(.+)", verdict)
     reasoning_match = re.search(r"Reasoning:\s*(.+)", verdict)
     logic_match = re.search(r"Logic:\s*(\d+)", verdict)
@@ -420,14 +450,12 @@ if launch and topic:
     winner = winner_match.group(1).strip() if winner_match else "Unknown"
     reasoning = reasoning_match.group(1).strip() if reasoning_match else "No detailed reasoning provided."
     
-    # Update stats for all 16 agents
     for agent in st.session_state.agent_stats:
         if agent == winner:
             st.session_state.agent_stats[agent]["wins"] += 1
         else:
             st.session_state.agent_stats[agent]["losses"] += 1
     
-    # Verdict display with scorecard
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
@@ -458,13 +486,7 @@ if launch and topic:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Stats & Sharing
-    with st.expander("📊 Agent Leaderboard"):
-        for agent, s in st.session_state.agent_stats.items():
-            total = s['wins']+s['losses']
-            rate = f"{s['wins']/total*100:.0f}%" if total else "0%"
-            st.text(f"{agent}: {s['wins']}W / {s['losses']}L ({rate})")
-    
+    # Sharing
     share = f"Nyx verdict: {winner} wins on '{topic}'"
     col_a, col_b = st.columns(2)
     with col_a:
