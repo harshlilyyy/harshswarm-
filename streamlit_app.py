@@ -1,8 +1,6 @@
 import streamlit as st
 import time
 import re
-import json
-import os
 from datetime import datetime
 from openai import OpenAI
 
@@ -139,15 +137,6 @@ st.markdown("""
         font-size: 1.1rem;
         opacity: 0.8;
     }
-    .copy-btn {
-        background: transparent;
-        border: 1px solid var(--rose-gold);
-        border-radius: 20px;
-        padding: 0.3rem 1rem;
-        font-size: 0.8rem;
-        cursor: pointer;
-        color: var(--rose-gold);
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -155,7 +144,7 @@ st.markdown("""
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 if "saved_history" not in st.session_state:
-    st.session_state.saved_history = []  # local lightweight history
+    st.session_state.saved_history = []
 
 # --- API Providers (7 providers) ---
 PROVIDERS = [
@@ -234,7 +223,7 @@ class Moderator(Agent):
 ALL_AGENTS = [
     ("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
     ("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),
+    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),   # True = is moderator
     ("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
     ("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
     ("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
@@ -251,18 +240,26 @@ ALL_AGENTS = [
 ]
 
 def create_panel(selected_agents):
-    """Create panel from selected agent names. Always includes moderator at position 2."""
+    """Create panel from selected agent names. Always includes moderator at correct position."""
     agents = []
     moderator = None
-    for name, role, pers, av, card in ALL_AGENTS:
+    for agent_data in ALL_AGENTS:
+        name = agent_data[0]
         if name not in selected_agents:
             continue
-        if name == "Ahany":
-            moderator = Moderator(name, role, pers, av, card)
+        role = agent_data[1]
+        personality = agent_data[2]
+        avatar = agent_data[3]
+        card_class = agent_data[4]
+        if len(agent_data) == 6 and agent_data[5]:
+            moderator = Moderator(name, role, personality, avatar, card_class)
         else:
-            agents.append(Agent(name, role, pers, av, card))
-    if moderator and len(agents) >= 2:
-        agents.insert(2, moderator)
+            agents.append(Agent(name, role, personality, avatar, card_class))
+    if moderator:
+        if len(agents) >= 2:
+            agents.insert(2, moderator)
+        else:
+            agents.append(moderator)
     return agents
 
 # --- Swarm Mode Prompts ---
@@ -291,7 +288,6 @@ with st.sidebar:
     tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
 
     st.markdown("### 🧑‍🤝‍🧑 Agent Picker")
-    # Preselect default 4 agents
     default_agents = ["Harsh", "Jayant", "Ahany", "Nish"]
     all_agent_names = [a[0] for a in ALL_AGENTS]
     selected_agents = st.multiselect(
@@ -359,7 +355,6 @@ if launch and topic:
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
 
         for agent in order:
-            # Thinking indicator
             with st.spinner(f"{agent.name} is thinking..."):
                 reply, provider = generate_with_fallback(
                     f"Round {r} on '{topic}'. History: {last_msg}",
@@ -449,9 +444,11 @@ Takeaway: [1 sentence]
     </div>
     """, unsafe_allow_html=True)
 
-    # Copy verdict button
+    # Copy verdict button (fixed)
     verdict_text = f"Nyx Verdict on '{topic}'\nWinner: {winner}\nReasoning: {reasoning}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
-    st.caption("📋 Verdict copied to clipboard" if st.button("📋 Copy Verdict") and st.session_state.__setitem__("clipboard", verdict_text) else "")
+    if st.button("📋 Copy Verdict"):
+        st.session_state["clipboard"] = verdict_text
+        st.success("✅ Verdict copied to clipboard!")
 
     # Save to lightweight history
     st.session_state.saved_history.append({
