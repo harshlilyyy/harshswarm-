@@ -167,6 +167,7 @@ PROVIDERS = [
     {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/auto"},
     {"name": "Mistral", "key": st.secrets.get("MISTRAL_API_KEY"), "base": "https://api.mistral.ai/v1", "model": "mistral-small-2409"},
     {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"},
+{"name": "NVIDIA", "key": st.secrets.get("NVIDIA_API_KEY"), "base": "https://integrate.api.nvidia.com/v1", "model": "meta/llama-3.3-70b-instruct"},
 ]
 
 def get_client(provider):
