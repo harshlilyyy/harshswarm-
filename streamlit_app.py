@@ -92,7 +92,7 @@ st.markdown("""
 
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.6) !important;
-        backdrop-filter: blur(15px lifetime);
+        backdrop-filter: blur(15px);
         border: 0.5px solid var(--glass-border) !important;
         border-radius: 60px !important;
     }
@@ -125,6 +125,10 @@ st.markdown("""
     .card-ethicist { border-left-color: #D4A5C0; }
     .card-policy { border-left-color: #E8D5B5; }
     .card-conspiracy { border-left-color: #B5A5C0; }
+    .card-psychologist { border-left-color: #F0B5C0; }
+    .card-economist { border-left-color: #C0B5D4; }
+    .card-technologist { border-left-color: #A5D4D0; }
+    .card-legal { border-left-color: #D4C0A5; }
 
     .verdict-box {
         background: rgba(255, 255, 255, 0.5);
@@ -146,7 +150,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Session State ---
+# --- Session State (expanded to 16 agents) ---
 if "agent_stats" not in st.session_state:
     st.session_state.agent_stats = {
         "Harsh": {"wins": 0, "losses": 0}, "Jayant": {"wins": 0, "losses": 0},
@@ -155,11 +159,13 @@ if "agent_stats" not in st.session_state:
         "Shivam": {"wins": 0, "losses": 0}, "Philosopher": {"wins": 0, "losses": 0},
         "Futurist": {"wins": 0, "losses": 0}, "DataScientist": {"wins": 0, "losses": 0},
         "Ethicist": {"wins": 0, "losses": 0}, "Ahany": {"wins": 0, "losses": 0},
+        "Psychologist": {"wins": 0, "losses": 0}, "Economist": {"wins": 0, "losses": 0},
+        "Technologist": {"wins": 0, "losses": 0}, "Legal Expert": {"wins": 0, "losses": 0},
     }
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 
-# --- API Providers (6 providers, Groq reserved for Judge) ---
+# --- API Providers (7 providers, Groq reserved for Judge) ---
 PROVIDERS = [
     {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
     {"name": "DeepSeek", "key": st.secrets.get("DEEPSEEK_API_KEY"), "base": "https://api.deepseek.com", "model": "deepseek-chat"},
@@ -167,7 +173,7 @@ PROVIDERS = [
     {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/auto"},
     {"name": "Mistral", "key": st.secrets.get("MISTRAL_API_KEY"), "base": "https://api.mistral.ai/v1", "model": "mistral-small-2409"},
     {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"},
-{"name": "NVIDIA", "key": st.secrets.get("NVIDIA_API_KEY"), "base": "https://integrate.api.nvidia.com/v1", "model": "meta/llama-3.3-70b-instruct"},
+    {"name": "NVIDIA", "key": st.secrets.get("NVIDIA_API_KEY"), "base": "https://integrate.api.nvidia.com/v1", "model": "meta/llama-3.3-70b-instruct"},
 ]
 
 def get_client(provider):
@@ -211,7 +217,7 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         st.warning(f"⚠️ All providers temporarily unavailable. Last error: {last_error}")
         return "Response unavailable.", "None"
 
-# --- Agents ---
+# --- 16 Agents (12 original + 4 new) ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
@@ -240,19 +246,24 @@ class Moderator(Agent):
 ALL_AGENTS = [
     ("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
     ("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),
+    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),   # True = is moderator
     ("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
     ("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
     ("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
     ("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
     ("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
     ("Philosopher", "Philosopher", "Ethical/historical context.", "🟤", "card-philosopher"),
-    ("Futurist", "Futurist", "50-year perspective.", "🔮", "card-futurist"),
+    ("Futurist", "Futurist", "50‑year perspective.", "🔮", "card-futurist"),
     ("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
     ("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
+    # Four new specialists
+    ("Psychologist", "Psychologist", "Human behavior & cognitive biases.", "🧠", "card-psychologist"),
+    ("Economist", "Economist", "Financial & market impact.", "📈", "card-economist"),
+    ("Technologist", "Technologist", "Cutting‑edge tech feasibility.", "💻", "card-technologist"),
+    ("Legal Expert", "Legal Expert", "Laws, regulations & precedents.", "⚖️", "card-legal"),
 ]
 
-def create_panel(count=6):
+def create_panel(count=4):
     if count < 3:
         count = 3
     agents = []
@@ -319,7 +330,7 @@ with st.container():
             rounds = st.select_slider("Rounds", options=[2, 3, 4], value=2, label_visibility="collapsed")
         with col2:
             st.caption("Debaters")
-            agent_count = st.select_slider("Agents", options=list(range(3, 13)), value=6, label_visibility="collapsed")
+            agent_count = st.select_slider("Agents", options=list(range(3, 17)), value=4, label_visibility="collapsed")
         with col3:
             st.caption("Speed vs. quality")
             mode = st.radio("Provider", ["⚡ Fast", "🧠 Smart", "🤖 Auto"], horizontal=True, index=2, label_visibility="collapsed")
@@ -330,13 +341,12 @@ with st.container():
 
 # --- Debate Execution ---
 if launch and topic:
-    # Map mode to preferred provider (but Groq is reserved for judge, so we never use it for agents)
     if mode == "⚡ Fast":
         preferred = "Cerebras"
     elif mode == "🧠 Smart":
         preferred = "DeepSeek"
     else:
-        preferred = None  # Auto will try all except Groq (since it's reserved)
+        preferred = None
     
     agents = create_panel(agent_count)
     log = []
@@ -373,7 +383,7 @@ if launch and topic:
                     st.markdown(f'<div class="debate-card {agent.card_class}">{reply}</div>', unsafe_allow_html=True)
             round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
             last_msg = reply
-            time.sleep(0.8)  # Throttle to avoid rate limits
+            time.sleep(0.8)
         
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
@@ -410,7 +420,7 @@ if launch and topic:
     winner = winner_match.group(1).strip() if winner_match else "Unknown"
     reasoning = reasoning_match.group(1).strip() if reasoning_match else "No detailed reasoning provided."
     
-    # Update stats
+    # Update stats for all 16 agents
     for agent in st.session_state.agent_stats:
         if agent == winner:
             st.session_state.agent_stats[agent]["wins"] += 1
