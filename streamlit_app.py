@@ -149,15 +149,16 @@ if "debate_history" not in st.session_state:
 if "saved_history" not in st.session_state:
     st.session_state.saved_history = []
 
-# --- API Providers (corrected, with SambaNova, Cloudflare placeholder) ---
+# --- API Providers (corrected model names) ---
 PROVIDERS = [
-    {"name": "Groq",          "key": st.secrets.get("GROQ_API_KEY"),          "base": "https://api.groq.com/openai/v1",                "model": "llama-3.3-70b-versatile"},
-    {"name": "SambaNova",     "key": st.secrets.get("SAMBA_API_KEY"),         "base": "https://api.sambanova.ai/v1",                   "model": "llama-3.3-70b"},
-    {"name": "DeepSeek",      "key": st.secrets.get("DEEPSEEK_API_KEY"),      "base": "https://api.deepseek.com",                      "model": "deepseek-chat"},
-    {"name": "Cerebras",      "key": st.secrets.get("CEREBRAS_API_KEY"),      "base": "https://api.cerebras.ai/v1",                    "model": "llama3.3-70b"},
-    {"name": "Google",        "key": st.secrets.get("GEMINI_API_KEY"),        "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.0-flash"},
-    {"name": "Mistral",       "key": st.secrets.get("MISTRAL_API_KEY"),       "base": "https://api.mistral.ai/v1",                     "model": "mistral-small-2409"},
-    {"name": "OpenRouter",    "key": st.secrets.get("OPENROUTER_API_KEY"),    "base": "https://openrouter.ai/api/v1",                  "model": "meta-llama/llama-3.3-70b-instruct:free"},
+    {"name": "Groq",      "key": st.secrets.get("GROQ_API_KEY"),      "base": "https://api.groq.com/openai/v1",                "model": "llama-3.3-70b-versatile"},
+    {"name": "SambaNova", "key": st.secrets.get("SAMBA_API_KEY"),     "base": "https://api.sambanova.ai/v1",                   "model": "Meta-Llama-3.3-70B-Instruct"},
+    {"name": "Cerebras",  "key": st.secrets.get("CEREBRAS_API_KEY"),  "base": "https://api.cerebras.ai/v1",                    "model": "llama-3.3-70b"},
+    {"name": "Google",    "key": st.secrets.get("GEMINI_API_KEY"),    "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.5-flash"},
+    {"name": "Mistral",   "key": st.secrets.get("MISTRAL_API_KEY"),   "base": "https://api.mistral.ai/v1",                     "model": "mistral-small-3.2-24b-instruct-2506"},
+    {"name": "DeepSeek",  "key": st.secrets.get("DEEPSEEK_API_KEY"),  "base": "https://api.deepseek.com",                      "model": "deepseek-chat"},
+    {"name": "OpenRouter","key": st.secrets.get("OPENROUTER_API_KEY"),"base": "https://openrouter.ai/api/v1",                  "model": "openrouter/free"},
+    {"name": "Cohere",    "key": st.secrets.get("COHERE_API_KEY"),    "base": "https://api.cohere.com/v2",                     "model": "command-r-plus"},
 ]
 
 def get_client(provider):
@@ -297,7 +298,7 @@ with st.sidebar:
     st.markdown("### 💜 Nyx")
     st.markdown("---")
 
-    # Provider tester (collapsible)
+    # Provider tester
     with st.expander("🔧 Test Providers", expanded=False):
         for p in PROVIDERS:
             if st.button(f"Test {p['name']}", key=f"test_{p['name']}"):
@@ -309,7 +310,11 @@ with st.sidebar:
                         st.error(f"{p['name']}: {result}")
 
     st.markdown("### 🤖 Kernel")
-    model_choice = st.selectbox("Active model", ["Groq", "SambaNova", "DeepSeek", "Cerebras", "Google", "Mistral", "OpenRouter", "🤖 Auto"], index=7)
+    model_choice = st.selectbox(
+        "Active model",
+        ["Groq", "SambaNova", "Cerebras", "Google", "Mistral", "DeepSeek", "OpenRouter", "Cohere", "🤖 Auto"],
+        index=8
+    )
     preferred = None if model_choice == "🤖 Auto" else model_choice
 
     st.markdown("---")
