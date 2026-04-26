@@ -19,11 +19,11 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;350;400;500&display=swap');
 
     :root {
-        --bg-light: #F5F0FF;           /* soft lavender */
+        --bg-light: #F5F0FF;
         --card-bg: rgba(255, 255, 255, 0.55);
         --border-glow: rgba(180, 130, 255, 0.4);
-        --purple-prime: #9B4DFF;       /* vibrant purple */
-        --pink-hot: #FF4D6D;           /* bold pink/red */
+        --purple-prime: #9B4DFF;
+        --pink-hot: #FF4D6D;
         --red-accent: #E63946;
         --text-dark: #2C2A28;
         --glass-border: rgba(255, 255, 255, 0.7);
@@ -109,7 +109,6 @@ st.markdown("""
         box-shadow: 0 12px 24px -6px rgba(255,77,109,0.5);
     }
 
-    /* Agent card borders — keep existing ones but add purple/red touches */
     .card-skeptic { border-left: 5px solid #E63946; }
     .card-optimist { border-left: 5px solid #9B4DFF; }
     .card-philosopher { border-left: 5px solid #C77DFF; }
@@ -150,15 +149,15 @@ if "debate_history" not in st.session_state:
 if "saved_history" not in st.session_state:
     st.session_state.saved_history = []
 
-# --- API Providers (7 providers) ---
+# --- API Providers (corrected, with SambaNova, Cloudflare placeholder) ---
 PROVIDERS = [
-    {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
-    {"name": "DeepSeek", "key": st.secrets.get("DEEPSEEK_API_KEY"), "base": "https://api.deepseek.com", "model": "deepseek-chat"},
-    {"name": "Cerebras", "key": st.secrets.get("CEREBRAS_API_KEY"), "base": "https://api.cerebras.ai/v1", "model": "llama3.3-70b"},
-    {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/auto"},
-    {"name": "Mistral", "key": st.secrets.get("MISTRAL_API_KEY"), "base": "https://api.mistral.ai/v1", "model": "mistral-small-2409"},
-    {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"},
-    {"name": "NVIDIA", "key": st.secrets.get("NVIDIA_API_KEY"), "base": "https://integrate.api.nvidia.com/v1", "model": "meta/llama-3.3-70b-instruct"},
+    {"name": "Groq",          "key": st.secrets.get("GROQ_API_KEY"),          "base": "https://api.groq.com/openai/v1",                "model": "llama-3.3-70b-versatile"},
+    {"name": "SambaNova",     "key": st.secrets.get("SAMBA_API_KEY"),         "base": "https://api.sambanova.ai/v1",                   "model": "llama-3.3-70b"},
+    {"name": "DeepSeek",      "key": st.secrets.get("DEEPSEEK_API_KEY"),      "base": "https://api.deepseek.com",                      "model": "deepseek-chat"},
+    {"name": "Cerebras",      "key": st.secrets.get("CEREBRAS_API_KEY"),      "base": "https://api.cerebras.ai/v1",                    "model": "llama3.3-70b"},
+    {"name": "Google",        "key": st.secrets.get("GEMINI_API_KEY"),        "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.0-flash"},
+    {"name": "Mistral",       "key": st.secrets.get("MISTRAL_API_KEY"),       "base": "https://api.mistral.ai/v1",                     "model": "mistral-small-2409"},
+    {"name": "OpenRouter",    "key": st.secrets.get("OPENROUTER_API_KEY"),    "base": "https://openrouter.ai/api/v1",                  "model": "meta-llama/llama-3.3-70b-instruct:free"},
 ]
 
 def get_client(provider):
@@ -197,6 +196,27 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
     else:
         st.warning("All providers temporarily unavailable.")
         return "Response unavailable.", "None"
+
+def test_provider_connection(provider):
+    if not provider["key"]:
+        return "No API key"
+    try:
+        if provider["name"] == "Google":
+            import google.generativeai as genai
+            genai.configure(api_key=provider["key"])
+            model = genai.GenerativeModel(provider["model"])
+            model.generate_content("Say 'OK'", request_options={"timeout": 8})
+        else:
+            client = OpenAI(api_key=provider["key"], base_url=provider["base"])
+            client.chat.completions.create(
+                model=provider["model"],
+                messages=[{"role": "user", "content": "Say OK"}],
+                max_tokens=5,
+                timeout=8
+            )
+        return "✅ Working"
+    except Exception as e:
+        return f"❌ {str(e)[:60]}"
 
 # --- 16 Agents (Harsh adversarial but filter-safe) ---
 class Agent:
@@ -276,8 +296,20 @@ SWARM_MODES = {
 with st.sidebar:
     st.markdown("### 💜 Nyx")
     st.markdown("---")
+
+    # Provider tester (collapsible)
+    with st.expander("🔧 Test Providers", expanded=False):
+        for p in PROVIDERS:
+            if st.button(f"Test {p['name']}", key=f"test_{p['name']}"):
+                with st.spinner("Testing..."):
+                    result = test_provider_connection(p)
+                    if "✅" in result:
+                        st.success(f"{p['name']}: {result}")
+                    else:
+                        st.error(f"{p['name']}: {result}")
+
     st.markdown("### 🤖 Kernel")
-    model_choice = st.selectbox("Active model", ["Groq", "DeepSeek", "Cerebras", "OpenRouter", "Mistral", "Google", "NVIDIA", "🤖 Auto"], index=7)
+    model_choice = st.selectbox("Active model", ["Groq", "SambaNova", "DeepSeek", "Cerebras", "Google", "Mistral", "OpenRouter", "🤖 Auto"], index=7)
     preferred = None if model_choice == "🤖 Auto" else model_choice
 
     st.markdown("---")
@@ -369,7 +401,6 @@ if launch and topic:
             with st.spinner(f"{agent.name} is thinking..."):
                 reply, provider = agent.speak(topic, last_msg, r, preferred, tone, swarm_mode)
 
-            # Detect if preferred model was skipped
             if actual_first_provider is None:
                 actual_first_provider = provider
                 if preferred and preferred != "🤖 Auto" and provider != preferred and not fallback_warning_shown:
@@ -440,7 +471,6 @@ Takeaway: [1 sentence]
     persuasiveness = extract(r"Persuasiveness:\s*(.+)", verdict)
     takeaway = extract(r"Takeaway:\s*(.+)", verdict)
 
-    # --- Verdict Display ---
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
