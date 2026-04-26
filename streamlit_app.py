@@ -7,42 +7,44 @@ from openai import OpenAI
 # --- Page Config ---
 st.set_page_config(
     page_title="Nyx · by Harsh",
-    page_icon="🤍",
+    page_icon="💜",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- Cosmic Pearl Glassmorphism CSS ---
+# --- Lavender Haze Purple/Pink/Red Glassmorphism CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;350;400;500&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap');
 
     :root {
-        --pearl: #F9F6F0;
-        --rose-gold: #D4A5A5;
-        --champagne: #E8D5B5;
-        --warm-charcoal: #2C2A28;
-        --glass-border: rgba(255,255,255,0.6);
+        --bg-light: #F5F0FF;           /* soft lavender */
+        --card-bg: rgba(255, 255, 255, 0.55);
+        --border-glow: rgba(180, 130, 255, 0.4);
+        --purple-prime: #9B4DFF;       /* vibrant purple */
+        --pink-hot: #FF4D6D;           /* bold pink/red */
+        --red-accent: #E63946;
+        --text-dark: #2C2A28;
+        --glass-border: rgba(255, 255, 255, 0.7);
     }
 
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
-        background: var(--pearl);
-        color: var(--warm-charcoal);
+        background: var(--bg-light);
+        color: var(--text-dark);
     }
 
     .stApp {
-        background: radial-gradient(circle at 50% 20%, rgba(232,213,181,0.25) 0%, var(--pearl) 80%);
+        background: radial-gradient(circle at 30% 20%, rgba(180,130,255,0.15) 0%, var(--bg-light) 80%);
     }
 
     [data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.55) !important;
+        background: rgba(255, 255, 255, 0.6) !important;
         backdrop-filter: blur(24px) !important;
         -webkit-backdrop-filter: blur(24px) !important;
-        border-right: 0.5px solid var(--glass-border) !important;
-        box-shadow: 4px 0 20px rgba(0,0,0,0.02) !important;
+        border-right: 0.5px solid var(--border-glow) !important;
+        box-shadow: 4px 0 20px rgba(155,77,255,0.05) !important;
     }
     [data-testid="stSidebar"] .block-container {
         padding: 2rem 1.5rem !important;
@@ -59,7 +61,7 @@ st.markdown("""
         font-style: italic;
         font-size: 3.8rem;
         text-align: center;
-        background: linear-gradient(145deg, var(--rose-gold), #B58D8D);
+        background: linear-gradient(135deg, var(--pink-hot) 0%, var(--purple-prime) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.2rem;
@@ -72,70 +74,72 @@ st.markdown("""
         font-size: 1rem;
     }
     .glass-card {
-        background: rgba(255, 255, 255, 0.5);
+        background: var(--card-bg);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border-radius: 28px;
         padding: 1.5rem;
         margin-bottom: 1rem;
         border: 0.5px solid var(--glass-border);
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 30px -10px rgba(155,77,255,0.08);
     }
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.6) !important;
+        background: rgba(255, 255, 255, 0.65) !important;
         backdrop-filter: blur(15px);
-        border: 0.5px solid var(--glass-border) !important;
+        border: 0.5px solid var(--border-glow) !important;
         border-radius: 60px !important;
         padding: 1rem 1.5rem !important;
         font-size: 1.1rem !important;
-        color: var(--warm-charcoal) !important;
+        color: var(--text-dark) !important;
         text-align: center;
     }
     .stButton > button {
-        background: linear-gradient(145deg, var(--rose-gold), var(--champagne));
+        background: linear-gradient(135deg, var(--purple-prime) 0%, var(--pink-hot) 100%);
         border: none;
         border-radius: 60px;
-        font-weight: 500;
+        font-weight: 600;
         color: white;
-        box-shadow: 0 8px 20px -8px rgba(212,165,165,0.4);
+        box-shadow: 0 8px 20px -6px rgba(255,77,109,0.35);
         width: 100%;
         padding: 0.8rem 1.5rem;
+        transition: all 0.2s;
     }
-    .debate-card {
-        background: rgba(255, 255, 255, 0.45);
-        backdrop-filter: blur(20px);
-        border-radius: 24px;
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 0.8rem;
-        border-left: 5px solid;
+    .stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 12px 24px -6px rgba(255,77,109,0.5);
     }
-    .card-skeptic { border-left-color: #D4A5A5; }
-    .card-optimist { border-left-color: #B5C9B5; }
-    .card-philosopher { border-left-color: #C5B5D4; }
-    .card-futurist { border-left-color: #A5C9D4; }
-    .card-data { border-left-color: #A5D4C0; }
-    .card-ethicist { border-left-color: #D4A5C0; }
-    .card-policy { border-left-color: #E8D5B5; }
-    .card-conspiracy { border-left-color: #B5A5C0; }
-    .card-psychologist { border-left-color: #F0B5C0; }
-    .card-economist { border-left-color: #C0B5D4; }
-    .card-technologist { border-left-color: #A5D4D0; }
-    .card-legal { border-left-color: #D4C0A5; }
+
+    /* Agent card borders — keep existing ones but add purple/red touches */
+    .card-skeptic { border-left: 5px solid #E63946; }
+    .card-optimist { border-left: 5px solid #9B4DFF; }
+    .card-philosopher { border-left: 5px solid #C77DFF; }
+    .card-futurist { border-left: 5px solid #FF4D6D; }
+    .card-data { border-left: 5px solid #5E60CE; }
+    .card-ethicist { border-left: 5px solid #FF6B6B; }
+    .card-policy { border-left: 5px solid #F06595; }
+    .card-conspiracy { border-left: 5px solid #845EF7; }
+    .card-psychologist { border-left: 5px solid #F06595; }
+    .card-economist { border-left: 5px solid #DA77F2; }
+    .card-technologist { border-left: 5px solid #748FFC; }
+    .card-legal { border-left: 5px solid #FF8787; }
+    .card-moderator { border-left: 5px solid #E63946; }
+
     .verdict-box {
-        background: rgba(255, 255, 255, 0.5);
+        background: var(--card-bg);
         backdrop-filter: blur(20px);
         border-radius: 28px;
         padding: 1.5rem;
         margin: 1.5rem 0;
-        border-left: 5px solid var(--rose-gold);
-        font-family: 'Courier Prime', monospace;
+        border-left: 5px solid var(--purple-prime);
     }
+
     .round-tracker {
         text-align: center;
         margin: 0.5rem 0 0.8rem;
         font-weight: 600;
         font-size: 1.1rem;
         opacity: 0.8;
+        color: var(--pink-hot);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -165,7 +169,6 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
         providers = PROVIDERS
-    last_error = None
     for p in providers:
         if not p["key"]:
             continue
@@ -183,7 +186,9 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
                 if system:
                     messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-                resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.7, max_tokens=250)
+                resp = client.chat.completions.create(
+                    model=p["model"], messages=messages, temperature=0.7, max_tokens=250
+                )
                 return resp.choices[0].message.content.strip(), p["name"]
         except:
             continue
@@ -193,64 +198,61 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         st.warning("All providers temporarily unavailable.")
         return "Response unavailable.", "None"
 
-# --- 16 Agents ---
+# --- 16 Agents (Harsh adversarial but filter-safe) ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone):
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode):
         history = "\n".join(self.history[-3:]) or "No previous chat."
         tone_instr = f"Respond in a {tone} tone." if tone else ""
-        system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr}"
+        mode_instr = SWARM_MODES.get(swarm_mode, "")
+        system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} This is a {swarm_mode} session. {mode_instr}"
         prompt = f"""Debate round {round_num} on: "{topic}"
 **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
 History: {history}
 Last: "{last_msg}"
 """
-        reply, _ = generate_with_fallback(prompt, system, preferred_provider)
+        reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
-        return reply
+        return reply, provider
 
 class Moderator(Agent):
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone):
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode):
         history = "\n".join(self.history[-5:]) or "No debate yet."
         system = f"You are {self.name}, the moderator. Be sharp and impartial."
         prompt = f"Summarize, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
-        reply, _ = generate_with_fallback(prompt, system, preferred_provider)
+        reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
-        return reply
+        return reply, provider
 
 ALL_AGENTS = [
-    ("Harsh", "Skeptic", "Finds flaws and risks.", "🔴", "card-skeptic"),
-    ("Jayant", "Optimist", "Sees opportunity.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Sharp journalist.", "🔵", "card-skeptic", True),   # True = is moderator
-    ("Ritik", "Policy Advisor", "Gov/regulation lens.", "🟡", "card-policy"),
-    ("Kavya", "Retail Investor", "Everyday person.", "🟣", "card-optimist"),
-    ("Nish", "Scientist", "Empirical evidence.", "🟠", "card-data"),
+    ("Harsh", "Skeptic", "Ruthlessly find logical flaws. Challenge every assumption directly. Never concede without evidence.", "🔴", "card-skeptic"),
+    ("Jayant", "Optimist", "Sees opportunity and growth in every challenge.", "🟢", "card-optimist"),
+    ("Ahany", "Moderator", "Sharp journalist who challenges all sides.", "🔵", "card-moderator", True),
+    ("Ritik", "Policy Advisor", "Gov/regulation perspective.", "🟡", "card-policy"),
+    ("Kavya", "Retail Investor", "Everyday person's practical view.", "🟣", "card-optimist"),
+    ("Nish", "Scientist", "Empirical evidence only.", "🟠", "card-data"),
     ("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
-    ("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
-    ("Philosopher", "Philosopher", "Ethical/historical context.", "🟤", "card-philosopher"),
-    ("Futurist", "Futurist", "50‑year perspective.", "🔮", "card-futurist"),
-    ("DataScientist", "Data Scientist", "Statistics only.", "📊", "card-data"),
+    ("Shivam", "Conspiracy Theorist", "Hidden agendas and unconventional views.", "⚫", "card-conspiracy"),
+    ("Philosopher", "Philosopher", "Ethical and historical context.", "🟤", "card-philosopher"),
+    ("Futurist", "Futurist", "Long-term implications.", "🔮", "card-futurist"),
+    ("DataScientist", "Data Scientist", "Statistics and evidence.", "📊", "card-data"),
     ("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
-    ("Psychologist", "Psychologist", "Human behavior & cognitive biases.", "🧠", "card-psychologist"),
-    ("Economist", "Economist", "Financial & market impact.", "📈", "card-economist"),
-    ("Technologist", "Technologist", "Cutting‑edge tech feasibility.", "💻", "card-technologist"),
-    ("Legal Expert", "Legal Expert", "Laws, regulations & precedents.", "⚖️", "card-legal"),
+    ("Psychologist", "Psychologist", "Human behavior and cognitive biases.", "🧠", "card-psychologist"),
+    ("Economist", "Economist", "Financial and market impact.", "📈", "card-economist"),
+    ("Technologist", "Technologist", "Cutting-edge tech feasibility.", "💻", "card-technologist"),
+    ("Legal Expert", "Legal Expert", "Laws, regulations, and precedents.", "⚖️", "card-legal"),
 ]
 
 def create_panel(selected_agents):
-    """Create panel from selected agent names. Always includes moderator at correct position."""
     agents = []
     moderator = None
     for agent_data in ALL_AGENTS:
         name = agent_data[0]
         if name not in selected_agents:
             continue
-        role = agent_data[1]
-        personality = agent_data[2]
-        avatar = agent_data[3]
-        card_class = agent_data[4]
+        role, personality, avatar, card_class = agent_data[1], agent_data[2], agent_data[3], agent_data[4]
         if len(agent_data) == 6 and agent_data[5]:
             moderator = Moderator(name, role, personality, avatar, card_class)
         else:
@@ -262,20 +264,18 @@ def create_panel(selected_agents):
             agents.append(moderator)
     return agents
 
-# --- Swarm Mode Prompts ---
+# --- Swarm Mode Descriptions ---
 SWARM_MODES = {
-    "Debate": "Argue your position strongly. Challenge the other side.",
+    "Debate": "Argue your position strongly. Refute the opponent's points directly.",
     "Council": "Collaborate towards a consensus recommendation.",
-    "Devil's Advocate": "If you are the Devil's Advocate, push back aggressively on every point.",
-    "Exploration": "Explore a unique angle independently.",
-    "Rapid Fire": "Keep arguments very short, 1-2 sentences.",
+    "Devil's Advocate": "Push back aggressively on every point raised.",
+    "Exploration": "Each agent explores a unique angle independently.",
+    "Rapid Fire": "Keep arguments very short — 1-2 sentences maximum.",
 }
 # ===================== SIDEBAR =====================
 with st.sidebar:
-    st.markdown("### 🌑 Nyx")
+    st.markdown("### 💜 Nyx")
     st.markdown("---")
-
-    # Kernel / model selection
     st.markdown("### 🤖 Kernel")
     model_choice = st.selectbox("Active model", ["Groq", "DeepSeek", "Cerebras", "OpenRouter", "Mistral", "Google", "NVIDIA", "🤖 Auto"], index=7)
     preferred = None if model_choice == "🤖 Auto" else model_choice
@@ -283,6 +283,13 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### ⚙️ Swarm Mode")
     swarm_mode = st.selectbox("Mode", list(SWARM_MODES.keys()), index=0)
+    st.caption({
+        "Debate": "Agents clash, judge picks winner.",
+        "Council": "Agents collaborate to reach consensus.",
+        "Devil's Advocate": "One agent attacks your position aggressively.",
+        "Exploration": "Each agent explores a different angle.",
+        "Rapid Fire": "Short, fast arguments."
+    }.get(swarm_mode, ""))
 
     st.markdown("### 🎙️ Tone")
     tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
@@ -300,7 +307,7 @@ with st.sidebar:
         st.warning("Select at least 3 agents.")
         st.stop()
 
-    rounds = st.select_slider("Depth (rounds)", options=[2, 3, 4], value=3)
+    rounds = st.select_slider("Depth", options=[1, 2, 3, 4], value=2)
     show_args = st.checkbox("Show arguments", value=True)
 
     st.markdown("---")
@@ -313,20 +320,17 @@ with st.sidebar:
         st.caption("No debates yet.")
 
     st.markdown("---")
-    st.markdown("<p style='text-align:center;color:var(--rose-gold);'>by Harsh Dubey</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:var(--purple-prime);'>by Harsh Dubey</p>", unsafe_allow_html=True)
 
 # ===================== MAIN AREA =====================
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">AI Swarm Intelligence — Your problem, debated by experts.</div>', unsafe_allow_html=True)
-
-# Topic suggestions
 st.caption("💡 Try: Is remote work better than office? · Should I learn Python or JavaScript? · Is AI art real art?")
 
-# Topic input
 with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     topic = st.text_input("Ask anything...", value="", placeholder="Ask anything...", label_visibility="collapsed")
-    launch = st.button("Start Debate", use_container_width=True)
+    launch = st.button("Start Swarm", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ===================== DEBATE EXECUTION =====================
@@ -335,70 +339,81 @@ if launch and topic:
         st.error("Please select at least 3 agents (including moderator).")
         st.stop()
 
+    # --- Topic Sharpening ---
+    with st.spinner("🎯 Sharpening your topic..."):
+        sharpener_prompt = f"""Take this vague input: "{topic}" and turn it into a clear, focused resolution for a {swarm_mode} session. Do not change the meaning, just make it precise. Output only the refined topic."""
+        refined, _ = generate_with_fallback(sharpener_prompt, silent_fail=True)
+        if refined and refined not in ("Unable to generate response.", "Response unavailable."):
+            topic = refined.strip()
+            st.info(f"🎯 **Refined:** {topic}")
+
     agents = create_panel(selected_agents)
     log = []
     last_msg = "Let's begin."
     winner = None
     verdict = ""
-    used_provider = None
-    fallback_warning = False
+    actual_first_provider = None
+    fallback_warning_shown = False
 
     if show_args:
         st.markdown("### ⚔️ THE ARENA")
 
     for r in range(1, rounds+1):
         st.markdown(f'<div class="round-tracker">Round {r} of {rounds}</div>', unsafe_allow_html=True)
-        round_msgs = []
         order = [a for a in agents if a.name != "Ahany"]
 
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
 
-        for agent in order:
+        for idx, agent in enumerate(order):
             with st.spinner(f"{agent.name} is thinking..."):
-                reply, provider = generate_with_fallback(
-                    f"Round {r} on '{topic}'. History: {last_msg}",
-                    f"You are {agent.name} ({agent.role}). {agent.personality}. Mode: {swarm_mode}. Tone: {tone}.",
-                    preferred
-                )
-            if used_provider and provider != used_provider:
-                fallback_warning = True
-            used_provider = provider
+                reply, provider = agent.speak(topic, last_msg, r, preferred, tone, swarm_mode)
+
+            # Detect if preferred model was skipped
+            if actual_first_provider is None:
+                actual_first_provider = provider
+                if preferred and preferred != "🤖 Auto" and provider != preferred and not fallback_warning_shown:
+                    st.warning(f"⚠️ Preferred model `{preferred}` is unavailable. Switched to `{provider}` to keep the debate alive.")
+                    fallback_warning_shown = True
 
             if show_args:
                 with st.expander(f"{agent.avatar} {agent.name} · {agent.role}", expanded=True):
-                    st.markdown(f'<div class="debate-card {agent.card_class}">{reply}</div>', unsafe_allow_html=True)
-            round_msgs.append(f"{agent.avatar} {agent.name}: {reply}")
+                    st.markdown(reply)
+                    st.caption(f"via {provider}")
+            log.append(f"{agent.avatar} {agent.name} ({provider}): {reply}")
             last_msg = reply
             time.sleep(0.8)
 
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
-            mod_reply, provider = generate_with_fallback(
-                f"Moderate round {r} on '{topic}'. Last: {last_msg}",
-                f"You are {mod.name}, the moderator.",
-                preferred
-            )
+            with st.spinner(f"{mod.name} is moderating..."):
+                mod_reply, provider = mod.speak(topic, last_msg, r, preferred, tone, swarm_mode)
             if show_args:
                 with st.expander(f"{mod.avatar} {mod.name} · Moderator", expanded=True):
-                    st.markdown(f'<div class="debate-card" style="border-left-color:#D4A5A5;">{mod_reply}</div>', unsafe_allow_html=True)
-            round_msgs.append(f"{mod.avatar} {mod.name}: {mod_reply}")
+                    st.markdown(mod_reply)
+                    st.caption(f"via {provider}")
+            log.append(f"{mod.avatar} {mod.name} ({provider}): {mod_reply}")
             last_msg = mod_reply
-        log.append("\n".join(round_msgs))
 
     st.session_state.debate_history = log
 
-    if used_provider:
-        st.caption(f"⚙️ Powered by {used_provider}")
-    if fallback_warning:
-        st.warning("⚠️ The primary provider was unavailable; the debate automatically switched to a backup model.")
+    # --- Judge Verdict (mode-specific rubric) ---
+    with st.spinner("🧑‍⚖️ Judge deliberating..."):
+        verdict_prompt = f"""You are a strict, professional judge. Swarm mode: {swarm_mode}. Tone: {tone}.
+Evaluate the debate on: "{topic}"
+Transcript: {' '.join(log[-20:])}
 
-    with st.spinner("Judgment..."):
-        verdict_prompt = f"""You are the JUDGE of a debate. Swarm mode: {swarm_mode}. Tone: {tone}.
-Debate Topic: "{topic}"
-Transcript: {' '.join(log)}
+For Debate mode: The winner must have successfully rebutted the opponent's strongest points. Reward logical consistency, evidence quality, and rebuttal strength. Do NOT reward mere politeness or balance.
 
-Return your verdict in exactly this format:
+For Council mode: Reward consensus-building and synthesis of multiple perspectives.
+
+For Devil's Advocate mode: Reward the agent who stress-tested ideas and exposed weaknesses.
+
+For Exploration mode: Reward unique, well-reasoned angles.
+
+For Rapid Fire mode: Reward clarity, conciseness, and impact per word.
+
+Return exactly:
 Winner: [Name]
 Reasoning: [2-3 sentences]
 Confidence: [1-10]
@@ -411,7 +426,6 @@ Takeaway: [1 sentence]
 """
         verdict, _ = generate_with_fallback(verdict_prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
 
-    # Parse verdict
     def extract(pattern, text):
         m = re.search(pattern, text)
         return m.group(1).strip() if m else "?"
@@ -426,7 +440,7 @@ Takeaway: [1 sentence]
     persuasiveness = extract(r"Persuasiveness:\s*(.+)", verdict)
     takeaway = extract(r"Takeaway:\s*(.+)", verdict)
 
-    # Actionable Verdict box
+    # --- Verdict Display ---
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
@@ -444,13 +458,13 @@ Takeaway: [1 sentence]
     </div>
     """, unsafe_allow_html=True)
 
-    # Copy verdict button (fixed)
-    verdict_text = f"Nyx Verdict on '{topic}'\nWinner: {winner}\nReasoning: {reasoning}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
+    # --- Copy Verdict ---
+    verdict_text = f"Nyx Verdict\nTopic: {topic}\nWinner: {winner}\nReasoning: {reasoning}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
     if st.button("📋 Copy Verdict"):
         st.session_state["clipboard"] = verdict_text
-        st.success("✅ Verdict copied to clipboard!")
+        st.success("✅ Verdict copied!")
 
-    # Save to lightweight history
+    # --- Save History ---
     st.session_state.saved_history.append({
         "topic": topic,
         "winner": winner,
@@ -461,4 +475,4 @@ Takeaway: [1 sentence]
         st.session_state.saved_history = st.session_state.saved_history[-10:]
 
 # --- Footer ---
-st.markdown('<div style="text-align:center; margin-top:2rem; opacity:0.6; font-family:\'Playfair Display\',serif; font-style:italic;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;margin-top:2rem;opacity:0.6;font-family:\'Playfair Display\',serif;font-style:italic;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
