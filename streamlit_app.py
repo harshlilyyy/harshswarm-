@@ -1,6 +1,8 @@
 import streamlit as st
 import time
 import re
+import json
+import os
 from datetime import datetime
 from openai import OpenAI
 
@@ -12,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Lavender Haze Purple/Pink/Red Glassmorphism CSS ---
+# --- Lavender Haze Purple/Pink/Red Glassmorphism CSS (with new components) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -140,16 +142,43 @@ st.markdown("""
         opacity: 0.8;
         color: var(--pink-hot);
     }
+
+    /* Confidence radial gauge */
+    .confidence-gauge {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: conic-gradient(var(--purple-prime) 0deg, var(--purple-prime) calc(360deg * var(--pct)), #eee calc(360deg * var(--pct)));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin: 0 auto;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Session State ---
+# --- Session State & Knowledge Base ---
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 if "saved_history" not in st.session_state:
     st.session_state.saved_history = []
+if "panel_presets" not in st.session_state:
+    st.session_state.panel_presets = {}   # user-saved agent configurations
 
-# --- API Providers (corrected model names) ---
+# Lightweight Knowledge Graph (file-backed)
+KG_FILE = "nyx_knowledge.json"
+def load_kg():
+    if os.path.exists(KG_FILE):
+        with open(KG_FILE, "r") as f:
+            return json.load(f)
+    return {"debates": [], "entities": {}, "agent_insights": {}}
+
+def save_kg(kg):
+    with open(KG_FILE, "w") as f:
+        json.dump(kg, f, indent=2)
+
+# --- API Providers (8 verified) ---
 PROVIDERS = [
     {"name": "Groq",      "key": st.secrets.get("GROQ_API_KEY"),      "base": "https://api.groq.com/openai/v1",                "model": "llama-3.3-70b-versatile"},
     {"name": "SambaNova", "key": st.secrets.get("SAMBA_API_KEY"),     "base": "https://api.sambanova.ai/v1",                   "model": "Meta-Llama-3.3-70B-Instruct"},
@@ -219,38 +248,100 @@ def test_provider_connection(provider):
     except Exception as e:
         return f"❌ {str(e)[:60]}"
 
-# --- 16 Agents (Harsh adversarial but filter-safe) ---
+# --- Topic Entity Extraction (MiroFish-style) ---
+def extract_topic_entities(topic):
+    prompt = f"""Extract key entities (people, companies, concepts, events) from this topic: "{topic}". 
+Return a JSON list of objects with 'name' and 'type'. Example: [{{"name":"OpenAI","type":"company"}},{{"name":"AGI","type":"concept"}}]"""
+    resp, _ = generate_with_fallback(prompt, silent_fail=True)
+    try:
+        entities = json.loads(resp)
+        return entities[:5]   # max 5 entities
+    except:
+        return []
+
+# --- Auto-Expert Routing (DeepSeek-MoE style) ---
+EXPERT_KEYWORDS = {
+    "Skeptic": ["risk", "flaw", "danger", "problem", "against"],
+    "Optimist": ["opportunity", "growth", "benefit", "future", "progress"],
+    "Economist": ["economy", "market", "finance", "trade", "inflation"],
+    "Policy Advisor": ["government", "law", "regulation", "policy"],
+    "Scientist": ["science", "experiment", "data", "evidence", "study"],
+    "Ethicist": ["ethics", "moral", "should", "right", "wrong"],
+    "Technologist": ["tech", "software", "hardware", "innovation", "startup"],
+    "Legal Expert": ["legal", "court", "law", "constitution", "rights"],
+    "Philosopher": ["meaning", "consciousness", "existence", "truth", "know"],
+    "Futurist": ["future", "prediction", "trend", "forecast", "will"],
+    "Psychologist": ["behavior", "mind", "cognitive", "emotion", "psychology"],
+    "Data Scientist": ["data", "statistics", "analytics", "numbers", "model"],
+    "Conspiracy Theorist": ["hidden", "secret", "conspiracy", "cover-up", "agenda"],
+    "Investor": ["invest", "stock", "crypto", "portfolio", "return"],
+}
+
+def auto_select_agents(topic):
+    selected = ["Ahany"]  # moderator always included
+    for agent, keywords in EXPERT_KEYWORDS.items():
+        for kw in keywords:
+            if kw in topic.lower():
+                if agent not in selected:
+                    selected.append(agent)
+                break
+    # ensure at least 2 debaters
+    if len(selected) < 3:
+        selected = ["Harsh", "Jayant", "Ahany", "Nish"]
+    return selected
+
+# --- Auto-Tone Adaptation ---
+def auto_detect_tone(topic):
+    if "?" in topic:
+        return "Casual"
+    if any(w in topic.lower() for w in ["prove", "evidence", "study", "research", "demonstrate"]):
+        return "Academic"
+    if any(w in topic.lower() for w in ["brutal", "harsh", "destroy", "debunk", "roast"]):
+        return "Brutal"
+    return "Neutral"
+
+# --- 16 Agents (Harsh adversarial) ---
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode):
+        self.importance = 0.0   # memory importance score
+
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, entities_context):
         history = "\n".join(self.history[-3:]) or "No previous chat."
         tone_instr = f"Respond in a {tone} tone." if tone else ""
         mode_instr = SWARM_MODES.get(swarm_mode, "")
-        system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} This is a {swarm_mode} session. {mode_instr}"
+        entity_block = f"Relevant context extracted from topic: {entities_context}" if entities_context else ""
+
+        if think_deeper:
+            system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} {entity_block}. This is a {swarm_mode} session. {mode_instr}. Before speaking, perform a quick internal analysis: 1) strongest counter-argument 2) hidden assumptions 3) refined response."
+        else:
+            system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} {entity_block}. This is a {swarm_mode} session. {mode_instr}"
+
         prompt = f"""Debate round {round_num} on: "{topic}"
-**Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
+Format: **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
 History: {history}
 Last: "{last_msg}"
 """
         reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
+        # Simple importance scoring: longer, more structured replies get higher score
+        self.importance += len(reply.split()) / 100.0
         return reply, provider
 
 class Moderator(Agent):
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode):
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, entities_context):
         history = "\n".join(self.history[-5:]) or "No debate yet."
-        system = f"You are {self.name}, the moderator. Be sharp and impartial."
-        prompt = f"Summarize, note contradictions, ask a provocative question. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
+        system = f"You are {self.name}, the enhanced moderator. Detect contradictions, echo chambers, and force reluctant speakers to engage."
+        prompt = f"Summarise, flag at least one contradiction, and challenge a specific agent's weak point. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
         reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
         return reply, provider
 
 ALL_AGENTS = [
-    ("Harsh", "Skeptic", "Ruthlessly find logical flaws. Challenge every assumption directly. Never concede without evidence.", "🔴", "card-skeptic"),
+    ("Harsh", "Skeptic", "Ruthlessly find logical flaws. Challenge every assumption directly.", "🔴", "card-skeptic"),
     ("Jayant", "Optimist", "Sees opportunity and growth in every challenge.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Sharp journalist who challenges all sides.", "🔵", "card-moderator", True),
+    ("Ahany", "Moderator", "Enhanced journalist who detects contradictions and echo chambers.", "🔵", "card-moderator", True),
     ("Ritik", "Policy Advisor", "Gov/regulation perspective.", "🟡", "card-policy"),
     ("Kavya", "Retail Investor", "Everyday person's practical view.", "🟣", "card-optimist"),
     ("Nish", "Scientist", "Empirical evidence only.", "🟠", "card-data"),
@@ -293,6 +384,48 @@ SWARM_MODES = {
     "Exploration": "Each agent explores a unique angle independently.",
     "Rapid Fire": "Keep arguments very short — 1-2 sentences maximum.",
 }
+
+# --- Judge Types ---
+JUDGE_TYPES = {
+    "Strict Empiricist": "You demand hard evidence and data. Reject any argument without empirical support.",
+    "Pragmatist": "You favour practical, actionable conclusions. Reward realism.",
+    "Balanced": "You weigh all criteria equally. Default fairness.",
+}
+
+# --- Panel Presets ---
+PANEL_PRESETS = {
+    "Startup Decision": ["Harsh", "Jayant", "Ahany", "Economist", "Technologist", "Legal Expert"],
+    "Ethical Analysis": ["Harsh", "Jayant", "Ahany", "Philosopher", "Ethicist", "Psychologist"],
+    "Future Forecast": ["Harsh", "Jayant", "Ahany", "Futurist", "DataScientist", "Technologist"],
+    "Full House (12)": [a[0] for a in ALL_AGENTS[:12]],
+}
+
+# --- Obsidian Markdown Generator ---
+def generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence):
+    frontmatter = f"""---
+tags: [nyx, debate, ai]
+date: {datetime.now().strftime('%Y-%m-%d')}
+topic: "{topic}"
+winner: {winner}
+mode: {swarm_mode}
+tone: {tone}
+agents: {selected_agents}
+confidence: {confidence}/10
+---
+
+# Nyx Debate: {topic}
+
+## Verdict
+**Winner:** {winner}
+**Confidence:** {confidence}/10
+
+## Transcript
+{chr(10).join(log)}
+
+---
+*Generated by Nyx · by Harsh Dubey*
+"""
+    return frontmatter
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.markdown("### 💜 Nyx")
@@ -328,24 +461,57 @@ with st.sidebar:
         "Rapid Fire": "Short, fast arguments."
     }.get(swarm_mode, ""))
 
-    st.markdown("### 🎙️ Tone")
-    tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
+    # Think Deeper toggle (OpenMythos)
+    st.markdown("### 🧠 Cognition")
+    think_deeper = st.toggle("🔄 Think Deeper (multi-pass)", value=False)
+    adaptive_depth = st.toggle("📏 Adaptive Depth", value=False, help="Automatically adjust rounds based on debate quality")
 
-    st.markdown("### 🧑‍🤝‍🧑 Agent Picker")
-    default_agents = ["Harsh", "Jayant", "Ahany", "Nish"]
-    all_agent_names = [a[0] for a in ALL_AGENTS]
-    selected_agents = st.multiselect(
-        "Choose panelists",
-        options=all_agent_names,
-        default=default_agents,
-        help="Pick at least 3 agents (including moderator)."
-    )
-    if len(selected_agents) < 3:
-        st.warning("Select at least 3 agents.")
-        st.stop()
+    # Auto-Expert & Auto-Tone
+    auto_experts = st.toggle("🤖 Auto-Select Experts", value=True)
+    auto_tone = st.toggle("🎙️ Auto-Detect Tone", value=True)
+
+    st.markdown("### 🎙️ Tone")
+    if auto_tone:
+        st.caption("Tone will be auto-detected from your question.")
+        tone = None  # will be set later
+    else:
+        tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
+
+    st.markdown("### 🧑‍⚖️ Judge Type")
+    judge_type = st.selectbox("Judge", list(JUDGE_TYPES.keys()), index=2)
+
+    # Panel Presets
+    st.markdown("### 🧑‍🤝‍🧑 Panel Presets")
+    preset_choice = st.selectbox("Load preset", ["Custom"] + list(PANEL_PRESETS.keys()), index=0)
+    if preset_choice != "Custom":
+        selected_agents = PANEL_PRESETS[preset_choice]
+    else:
+        default_agents = ["Harsh", "Jayant", "Ahany", "Nish"]
+        all_agent_names = [a[0] for a in ALL_AGENTS]
+        selected_agents = st.multiselect(
+            "Choose panelists",
+            options=all_agent_names,
+            default=default_agents,
+            help="Pick at least 3 agents (including moderator)."
+        )
+        if len(selected_agents) < 3:
+            st.warning("Select at least 3 agents.")
+            st.stop()
+
+    # Save/Load custom panels
+    st.markdown("### 💾 Custom Panel")
+    panel_name = st.text_input("Panel name", placeholder="e.g., My Startup Team")
+    if st.button("Save Panel") and panel_name:
+        st.session_state.panel_presets[panel_name] = selected_agents.copy()
+        st.success(f"Saved '{panel_name}'")
+    if st.session_state.panel_presets:
+        load_preset = st.selectbox("Load saved", ["None"] + list(st.session_state.panel_presets.keys()))
+        if load_preset != "None":
+            selected_agents = st.session_state.panel_presets[load_preset]
 
     rounds = st.select_slider("Depth", options=[1, 2, 3, 4], value=2)
     show_args = st.checkbox("Show arguments", value=True)
+    tldr_mode = st.checkbox("TL;DR mode (summaries only)", value=False)
 
     st.markdown("---")
     st.markdown("### ⏳ Recent Debates")
@@ -358,6 +524,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("<p style='text-align:center;color:var(--purple-prime);'>by Harsh Dubey</p>", unsafe_allow_html=True)
+    st.caption("🤖 AI Personas — not real people")
 
 # ===================== MAIN AREA =====================
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
@@ -372,13 +539,28 @@ with st.container():
 
 # ===================== DEBATE EXECUTION =====================
 if launch and topic:
+    # --- Auto-Tone Detection ---
+    if auto_tone:
+        tone = auto_detect_tone(topic)
+        st.info(f"🎙️ Auto-detected tone: **{tone}**")
+
+    # --- Auto-Expert Selection ---
+    if auto_experts and preset_choice == "Custom":
+        selected_agents = auto_select_agents(topic)
+        st.info(f"🤖 Auto-selected experts: **{', '.join(selected_agents)}**")
+
     if len(selected_agents) < 3:
-        st.error("Please select at least 3 agents (including moderator).")
+        st.error("Please select at least 3 agents.")
         st.stop()
+
+    # --- Topic Entity Extraction ---
+    with st.spinner("🔍 Extracting key entities..."):
+        entities = extract_topic_entities(topic)
+        entities_context = json.dumps(entities) if entities else ""
 
     # --- Topic Sharpening ---
     with st.spinner("🎯 Sharpening your topic..."):
-        sharpener_prompt = f"""Take this vague input: "{topic}" and turn it into a clear, focused resolution for a {swarm_mode} session. Do not change the meaning, just make it precise. Output only the refined topic."""
+        sharpener_prompt = f"""Take this vague input: "{topic}" and turn it into a clear, focused resolution for a {swarm_mode} session. Output only the refined topic."""
         refined, _ = generate_with_fallback(sharpener_prompt, silent_fail=True)
         if refined and refined not in ("Unable to generate response.", "Response unavailable."):
             topic = refined.strip()
@@ -392,19 +574,26 @@ if launch and topic:
     actual_first_provider = None
     fallback_warning_shown = False
 
-    if show_args:
+    if show_args and not tldr_mode:
         st.markdown("### ⚔️ THE ARENA")
 
-    for r in range(1, rounds+1):
-        st.markdown(f'<div class="round-tracker">Round {r} of {rounds}</div>', unsafe_allow_html=True)
+    # --- Adaptive Depth Loop ---
+    current_rounds = rounds
+    r = 1
+    while r <= current_rounds:
+        st.markdown(f'<div class="round-tracker">Round {r} of {current_rounds}</div>', unsafe_allow_html=True)
         order = [a for a in agents if a.name != "Ahany"]
 
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
 
+        round_arg_weights = []  # for argument weight visualisation
+
         for idx, agent in enumerate(order):
             with st.spinner(f"{agent.name} is thinking..."):
-                reply, provider = agent.speak(topic, last_msg, r, preferred, tone, swarm_mode)
+                reply, provider = agent.speak(
+                    topic, last_msg, r, preferred, tone, swarm_mode, think_deeper, entities_context
+                )
 
             if actual_first_provider is None:
                 actual_first_provider = provider
@@ -412,44 +601,71 @@ if launch and topic:
                     st.warning(f"⚠️ Preferred model `{preferred}` is unavailable. Switched to `{provider}` to keep the debate alive.")
                     fallback_warning_shown = True
 
-            if show_args:
+            if show_args and not tldr_mode:
                 with st.expander(f"{agent.avatar} {agent.name} · {agent.role}", expanded=True):
                     st.markdown(reply)
                     st.caption(f"via {provider}")
+            elif tldr_mode:
+                # One-sentence summary
+                summary_prompt = f"Summarise the following argument in one punchy sentence: {reply}"
+                short, _ = generate_with_fallback(summary_prompt, silent_fail=True)
+                st.markdown(f"*{agent.avatar} **{agent.name}**: {short}*")
+
             log.append(f"{agent.avatar} {agent.name} ({provider}): {reply}")
             last_msg = reply
+            # Argument weight: length + importance
+            weight = len(reply.split()) / 50.0 + agent.importance
+            round_arg_weights.append((agent.name, weight))
             time.sleep(0.8)
 
+        # --- Argument Weight Visualisation ---
+        if round_arg_weights and show_args:
+            st.markdown("**📊 Argument Influence**")
+            for name, w in round_arg_weights:
+                pct = min(w / max([x[1] for x in round_arg_weights]), 1.0)
+                st.progress(pct, text=f"{name}")
+
+        # Moderator (enhanced)
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
             with st.spinner(f"{mod.name} is moderating..."):
-                mod_reply, provider = mod.speak(topic, last_msg, r, preferred, tone, swarm_mode)
-            if show_args:
+                mod_reply, provider = mod.speak(
+                    topic, last_msg, r, preferred, tone, swarm_mode, think_deeper, entities_context
+                )
+            if show_args and not tldr_mode:
                 with st.expander(f"{mod.avatar} {mod.name} · Moderator", expanded=True):
                     st.markdown(mod_reply)
                     st.caption(f"via {provider}")
             log.append(f"{mod.avatar} {mod.name} ({provider}): {mod_reply}")
             last_msg = mod_reply
 
+        # Adaptive depth logic
+        if adaptive_depth:
+            quality_prompt = f"""On a scale of 1-10, how productive was this debate round? Topic: {topic}. Last messages: {last_msg}. Answer only the number."""
+            quality_resp, _ = generate_with_fallback(quality_prompt, silent_fail=True)
+            try:
+                quality = int(quality_resp)
+                if quality >= 7 and current_rounds == rounds:
+                    current_rounds += 1  # extend by one round
+                    st.caption("⚡ High-quality debate — extending by one round.")
+                elif quality <= 3 and current_rounds > 1:
+                    current_rounds -= 1
+                    st.caption("🛑 Debate losing momentum — ending early.")
+            except:
+                pass
+        r += 1
+
     st.session_state.debate_history = log
 
-    # --- Judge Verdict (mode-specific rubric) ---
-    with st.spinner("🧑‍⚖️ Judge deliberating..."):
-        verdict_prompt = f"""You are a strict, professional judge. Swarm mode: {swarm_mode}. Tone: {tone}.
-Evaluate the debate on: "{topic}"
+    # --- ReACT Judge (multi-pass) ---
+    with st.spinner("🧑‍⚖️ Judge deliberating (multi-pass analysis)..."):
+        judge_instr = JUDGE_TYPES.get(judge_type, JUDGE_TYPES["Balanced"])
+        verdict_prompt = f"""You are a judge. Type: {judge_type}. {judge_instr}
+Debate: "{topic}"
 Transcript: {' '.join(log[-20:])}
 
-For Debate mode: The winner must have successfully rebutted the opponent's strongest points. Reward logical consistency, evidence quality, and rebuttal strength. Do NOT reward mere politeness or balance.
+First, identify the three strongest arguments. Then, identify the weakest rebuttal. Finally, produce the verdict in this format:
 
-For Council mode: Reward consensus-building and synthesis of multiple perspectives.
-
-For Devil's Advocate mode: Reward the agent who stress-tested ideas and exposed weaknesses.
-
-For Exploration mode: Reward unique, well-reasoned angles.
-
-For Rapid Fire mode: Reward clarity, conciseness, and impact per word.
-
-Return exactly:
 Winner: [Name]
 Reasoning: [2-3 sentences]
 Confidence: [1-10]
@@ -468,7 +684,7 @@ Takeaway: [1 sentence]
 
     winner = extract(r"Winner:\s*(.+)", verdict)
     reasoning = extract(r"Reasoning:\s*(.+)", verdict)
-    confidence = extract(r"Confidence:\s*(.+)", verdict)
+    confidence_str = extract(r"Confidence:\s*(.+)", verdict)
     action = extract(r"Recommended Action:\s*(.+)", verdict)
     logic = extract(r"Logic:\s*(.+)", verdict)
     evidence = extract(r"Evidence:\s*(.+)", verdict)
@@ -476,11 +692,20 @@ Takeaway: [1 sentence]
     persuasiveness = extract(r"Persuasiveness:\s*(.+)", verdict)
     takeaway = extract(r"Takeaway:\s*(.+)", verdict)
 
+    try:
+        confidence = int(confidence_str)
+    except:
+        confidence = 5
+
+    # --- Confidence Visualisation ---
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
         <p><strong>Reasoning:</strong> {reasoning}</p>
-        <p><strong>Confidence:</strong> {confidence}/10</p>
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <p><strong>Confidence:</strong></p>
+            <div class="confidence-gauge" style="--pct:{confidence/10};">{confidence}/10</div>
+        </div>
         <p><strong>Recommended Action:</strong> {action}</p>
         <hr style="margin:1rem 0;border:0.5px solid rgba(0,0,0,0.1);"/>
         <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.9rem;">
@@ -493,13 +718,37 @@ Takeaway: [1 sentence]
     </div>
     """, unsafe_allow_html=True)
 
-    # --- Copy Verdict ---
-    verdict_text = f"Nyx Verdict\nTopic: {topic}\nWinner: {winner}\nReasoning: {reasoning}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
+    # --- Copy & Share ---
+    verdict_text = f"Nyx Verdict\nTopic: {topic}\nWinner: {winner}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
     if st.button("📋 Copy Verdict"):
         st.session_state["clipboard"] = verdict_text
         st.success("✅ Verdict copied!")
 
-    # --- Save History ---
+    share = f"Nyx verdict: {winner} wins on '{topic}'. Confidence: {confidence}/10."
+    st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Share on X</button></a>', unsafe_allow_html=True)
+
+    # --- Obsidian Download ---
+    md_content = generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence)
+    st.download_button(
+        label="📥 Save for Obsidian",
+        data=md_content,
+        file_name=f"nyx_debate_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+        mime="text/markdown"
+    )
+
+    # --- Save to Knowledge Graph ---
+    kg = load_kg()
+    kg["debates"].append({
+        "date": datetime.now().isoformat(),
+        "topic": topic,
+        "winner": winner,
+        "confidence": confidence,
+        "agents": selected_agents,
+        "verdict": verdict_text
+    })
+    save_kg(kg)
+
+    # --- Lightweight History ---
     st.session_state.saved_history.append({
         "topic": topic,
         "winner": winner,
