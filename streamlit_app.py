@@ -1,11 +1,12 @@
-import urllib.parse
 import streamlit as st
 import time
 import re
 import json
 import os
+import urllib.parse
 from datetime import datetime
 from openai import OpenAI
+
 # --- Page Config ---
 st.set_page_config(
     page_title="Nyx · by Harsh",
@@ -14,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Lavender Haze Purple/Pink/Red Glassmorphism CSS (with new components) ---
+# --- Lavender Haze Purple/Pink/Red Glassmorphism CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
@@ -178,16 +179,23 @@ def save_kg(kg):
     with open(KG_FILE, "w") as f:
         json.dump(kg, f, indent=2)
 
-# --- API Providers (8 verified) ---
+# --- API Providers (DeepSeek removed, HuggingFace added, Cohere & Mistral fixed) ---
 PROVIDERS = [
-    {"name": "Groq",      "key": st.secrets.get("GROQ_API_KEY"),      "base": "https://api.groq.com/openai/v1",                "model": "llama-3.3-70b-versatile"},
-    {"name": "SambaNova", "key": st.secrets.get("SAMBA_API_KEY"),     "base": "https://api.sambanova.ai/v1",                   "model": "Meta-Llama-3.3-70B-Instruct"},
-    {"name": "Cerebras",  "key": st.secrets.get("CEREBRAS_API_KEY"),  "base": "https://api.cerebras.ai/v1",                    "model": "llama-3.3-70b"},
-    {"name": "Google",    "key": st.secrets.get("GEMINI_API_KEY"),    "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.5-flash"},
-    {"name": "Mistral",   "key": st.secrets.get("MISTRAL_API_KEY"),   "base": "https://api.mistral.ai/v1",                     "model": "mistral-small-3.2-24b-instruct-2506"},
-    {"name": "DeepSeek",  "key": st.secrets.get("DEEPSEEK_API_KEY"),  "base": "https://api.deepseek.com",                      "model": "deepseek-chat"},
-    {"name": "OpenRouter","key": st.secrets.get("OPENROUTER_API_KEY"),"base": "https://openrouter.ai/api/v1",                  "model": "openrouter/free"},
-    {"name": "Cohere",    "key": st.secrets.get("COHERE_API_KEY"),    "base": "https://api.cohere.com/v2",                     "model": "command-r-plus"},
+    # Tier 1: Most reliable free providers
+    {"name": "Groq",           "key": st.secrets.get("GROQ_API_KEY"),           "base": "https://api.groq.com/openai/v1",                            "model": "llama-3.3-70b-versatile"},
+    {"name": "SambaNova",      "key": st.secrets.get("SAMBA_API_KEY"),          "base": "https://api.sambanova.ai/v1",                               "model": "Meta-Llama-3.3-70B-Instruct"},
+    {"name": "Cerebras",       "key": st.secrets.get("CEREBRAS_API_KEY"),       "base": "https://api.cerebras.ai/v1",                                "model": "llama-3.3-70b"},
+
+    # Tier 2: Working with corrected model names
+    {"name": "Google",         "key": st.secrets.get("GEMINI_API_KEY"),         "base": "https://generativelanguage.googleapis.com/v1beta",          "model": "gemini-2.5-flash"},
+    {"name": "Mistral",        "key": st.secrets.get("MISTRAL_API_KEY"),        "base": "https://api.mistral.ai/v1",                                 "model": "mistral-small-4"},
+    {"name": "Cohere",         "key": st.secrets.get("COHERE_API_KEY"),         "base": "https://api.cohere.ai/compatibility/v1",                    "model": "command-a-03-2025"},
+
+    # Tier 3: Free but rate‑limited
+    {"name": "OpenRouter",     "key": st.secrets.get("OPENROUTER_API_KEY"),     "base": "https://openrouter.ai/api/v1",                              "model": "openrouter/free"},
+
+    # Tier 4: New free providers
+    {"name": "HuggingFace",    "key": st.secrets.get("HF_API_KEY"),             "base": "https://api-inference.huggingface.co/v1",                   "model": "meta-llama/Llama-3.3-70B-Instruct"},
 ]
 
 def get_client(provider):
@@ -285,7 +293,6 @@ def auto_select_agents(topic):
                 if agent not in selected:
                     selected.append(agent)
                 break
-    # ensure at least 2 debaters
     if len(selected) < 3:
         selected = ["Harsh", "Jayant", "Ahany", "Nish"]
     return selected
@@ -305,7 +312,7 @@ class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-        self.importance = 0.0   # memory importance score
+        self.importance = 0.0
 
     def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, entities_context):
         history = "\n".join(self.history[-3:]) or "No previous chat."
@@ -325,7 +332,6 @@ Last: "{last_msg}"
 """
         reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
-        # Simple importance scoring: longer, more structured replies get higher score
         self.importance += len(reply.split()) / 100.0
         return reply, provider
 
@@ -376,7 +382,6 @@ def create_panel(selected_agents):
             agents.append(moderator)
     return agents
 
-# --- Swarm Mode Descriptions ---
 SWARM_MODES = {
     "Debate": "Argue your position strongly. Refute the opponent's points directly.",
     "Council": "Collaborate towards a consensus recommendation.",
@@ -385,14 +390,12 @@ SWARM_MODES = {
     "Rapid Fire": "Keep arguments very short — 1-2 sentences maximum.",
 }
 
-# --- Judge Types ---
 JUDGE_TYPES = {
     "Strict Empiricist": "You demand hard evidence and data. Reject any argument without empirical support.",
     "Pragmatist": "You favour practical, actionable conclusions. Reward realism.",
     "Balanced": "You weigh all criteria equally. Default fairness.",
 }
 
-# --- Panel Presets ---
 PANEL_PRESETS = {
     "Startup Decision": ["Harsh", "Jayant", "Ahany", "Economist", "Technologist", "Legal Expert"],
     "Ethical Analysis": ["Harsh", "Jayant", "Ahany", "Philosopher", "Ethicist", "Psychologist"],
@@ -400,7 +403,6 @@ PANEL_PRESETS = {
     "Full House (12)": [a[0] for a in ALL_AGENTS[:12]],
 }
 
-# --- Obsidian Markdown Generator ---
 def generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence):
     frontmatter = f"""---
 tags: [nyx, debate, ai]
@@ -445,7 +447,7 @@ with st.sidebar:
     st.markdown("### 🤖 Kernel")
     model_choice = st.selectbox(
         "Active model",
-        ["Groq", "SambaNova", "Cerebras", "Google", "Mistral", "DeepSeek", "OpenRouter", "Cohere", "🤖 Auto"],
+        ["Groq", "SambaNova", "Cerebras", "Google", "Mistral", "Cohere", "OpenRouter", "HuggingFace", "🤖 Auto"],
         index=8
     )
     preferred = None if model_choice == "🤖 Auto" else model_choice
@@ -461,26 +463,23 @@ with st.sidebar:
         "Rapid Fire": "Short, fast arguments."
     }.get(swarm_mode, ""))
 
-    # Think Deeper toggle (OpenMythos)
     st.markdown("### 🧠 Cognition")
     think_deeper = st.toggle("🔄 Think Deeper (multi-pass)", value=False)
     adaptive_depth = st.toggle("📏 Adaptive Depth", value=False, help="Automatically adjust rounds based on debate quality")
 
-    # Auto-Expert & Auto-Tone
     auto_experts = st.toggle("🤖 Auto-Select Experts", value=True)
     auto_tone = st.toggle("🎙️ Auto-Detect Tone", value=True)
 
     st.markdown("### 🎙️ Tone")
     if auto_tone:
         st.caption("Tone will be auto-detected from your question.")
-        tone = None  # will be set later
+        tone = None
     else:
         tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
 
     st.markdown("### 🧑‍⚖️ Judge Type")
     judge_type = st.selectbox("Judge", list(JUDGE_TYPES.keys()), index=2)
 
-    # Panel Presets
     st.markdown("### 🧑‍🤝‍🧑 Panel Presets")
     preset_choice = st.selectbox("Load preset", ["Custom"] + list(PANEL_PRESETS.keys()), index=0)
     if preset_choice != "Custom":
@@ -498,7 +497,6 @@ with st.sidebar:
             st.warning("Select at least 3 agents.")
             st.stop()
 
-    # Save/Load custom panels
     st.markdown("### 💾 Custom Panel")
     panel_name = st.text_input("Panel name", placeholder="e.g., My Startup Team")
     if st.button("Save Panel") and panel_name:
@@ -539,12 +537,12 @@ with st.container():
 
 # ===================== DEBATE EXECUTION =====================
 if launch and topic:
-    # --- Auto-Tone Detection ---
+    # Auto-tone
     if auto_tone:
         tone = auto_detect_tone(topic)
         st.info(f"🎙️ Auto-detected tone: **{tone}**")
 
-    # --- Auto-Expert Selection ---
+    # Auto-experts
     if auto_experts and preset_choice == "Custom":
         selected_agents = auto_select_agents(topic)
         st.info(f"🤖 Auto-selected experts: **{', '.join(selected_agents)}**")
@@ -553,12 +551,12 @@ if launch and topic:
         st.error("Please select at least 3 agents.")
         st.stop()
 
-    # --- Topic Entity Extraction ---
+    # Topic entities
     with st.spinner("🔍 Extracting key entities..."):
         entities = extract_topic_entities(topic)
         entities_context = json.dumps(entities) if entities else ""
 
-    # --- Topic Sharpening ---
+    # Topic sharpening
     with st.spinner("🎯 Sharpening your topic..."):
         sharpener_prompt = f"""Take this vague input: "{topic}" and turn it into a clear, focused resolution for a {swarm_mode} session. Output only the refined topic."""
         refined, _ = generate_with_fallback(sharpener_prompt, silent_fail=True)
@@ -577,7 +575,6 @@ if launch and topic:
     if show_args and not tldr_mode:
         st.markdown("### ⚔️ THE ARENA")
 
-    # --- Adaptive Depth Loop ---
     current_rounds = rounds
     r = 1
     while r <= current_rounds:
@@ -587,7 +584,7 @@ if launch and topic:
         persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
         st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
 
-        round_arg_weights = []  # for argument weight visualisation
+        round_arg_weights = []
 
         for idx, agent in enumerate(order):
             with st.spinner(f"{agent.name} is thinking..."):
@@ -606,26 +603,25 @@ if launch and topic:
                     st.markdown(reply)
                     st.caption(f"via {provider}")
             elif tldr_mode:
-                # One-sentence summary
                 summary_prompt = f"Summarise the following argument in one punchy sentence: {reply}"
                 short, _ = generate_with_fallback(summary_prompt, silent_fail=True)
                 st.markdown(f"*{agent.avatar} **{agent.name}**: {short}*")
 
             log.append(f"{agent.avatar} {agent.name} ({provider}): {reply}")
             last_msg = reply
-            # Argument weight: length + importance
             weight = len(reply.split()) / 50.0 + agent.importance
             round_arg_weights.append((agent.name, weight))
             time.sleep(0.8)
 
-        # --- Argument Weight Visualisation ---
+        # Argument weight visualisation
         if round_arg_weights and show_args:
             st.markdown("**📊 Argument Influence**")
+            max_w = max(w for _, w in round_arg_weights)
             for name, w in round_arg_weights:
-                pct = min(w / max([x[1] for x in round_arg_weights]), 1.0)
+                pct = min(w / max_w, 1.0) if max_w > 0 else 0.0
                 st.progress(pct, text=f"{name}")
 
-        # Moderator (enhanced)
+        # Enhanced moderator
         mod = next((a for a in agents if a.name == "Ahany"), None)
         if mod:
             with st.spinner(f"{mod.name} is moderating..."):
@@ -639,25 +635,26 @@ if launch and topic:
             log.append(f"{mod.avatar} {mod.name} ({provider}): {mod_reply}")
             last_msg = mod_reply
 
-        # Adaptive depth logic
+        # Adaptive depth
         if adaptive_depth:
             quality_prompt = f"""On a scale of 1-10, how productive was this debate round? Topic: {topic}. Last messages: {last_msg}. Answer only the number."""
             quality_resp, _ = generate_with_fallback(quality_prompt, silent_fail=True)
             try:
                 quality = int(quality_resp)
                 if quality >= 7 and current_rounds == rounds:
-                    current_rounds += 1  # extend by one round
+                    current_rounds += 1
                     st.caption("⚡ High-quality debate — extending by one round.")
                 elif quality <= 3 and current_rounds > 1:
                     current_rounds -= 1
                     st.caption("🛑 Debate losing momentum — ending early.")
             except:
                 pass
+
         r += 1
 
     st.session_state.debate_history = log
 
-    # --- ReACT Judge (multi-pass) ---
+    # ReACT Judge (multi-pass)
     with st.spinner("🧑‍⚖️ Judge deliberating (multi-pass analysis)..."):
         judge_instr = JUDGE_TYPES.get(judge_type, JUDGE_TYPES["Balanced"])
         verdict_prompt = f"""You are a judge. Type: {judge_type}. {judge_instr}
@@ -697,7 +694,7 @@ Takeaway: [1 sentence]
     except:
         confidence = 5
 
-    # --- Confidence Visualisation ---
+    # Verdict display
     st.markdown(f"""
     <div class="verdict-box">
         <h3>🏆 {winner}</h3>
@@ -718,7 +715,7 @@ Takeaway: [1 sentence]
     </div>
     """, unsafe_allow_html=True)
 
-    # --- Copy & Share ---
+    # Copy & Share
     verdict_text = f"Nyx Verdict\nTopic: {topic}\nWinner: {winner}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
     if st.button("📋 Copy Verdict"):
         st.session_state["clipboard"] = verdict_text
@@ -727,7 +724,7 @@ Takeaway: [1 sentence]
     share = f"Nyx verdict: {winner} wins on '{topic}'. Confidence: {confidence}/10."
     st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Share on X</button></a>', unsafe_allow_html=True)
 
-    # --- Obsidian Download ---
+    # Obsidian Markdown download
     md_content = generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence)
     st.download_button(
         label="📥 Save for Obsidian",
@@ -736,7 +733,7 @@ Takeaway: [1 sentence]
         mime="text/markdown"
     )
 
-    # --- Save to Knowledge Graph ---
+    # Knowledge Graph save
     kg = load_kg()
     kg["debates"].append({
         "date": datetime.now().isoformat(),
@@ -748,7 +745,7 @@ Takeaway: [1 sentence]
     })
     save_kg(kg)
 
-    # --- Lightweight History ---
+    # Lightweight history
     st.session_state.saved_history.append({
         "topic": topic,
         "winner": winner,
