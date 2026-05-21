@@ -125,22 +125,12 @@ st.markdown("""
     .card-technologist { border-left: 5px solid #748FFC; }
     .card-legal { border-left: 5px solid #FF8787; }
     .card-moderator { border-left: 5px solid #E63946; }
-
-    .verdict-box {
-        background: var(--card-bg);
-        backdrop-filter: blur(20px);
-        border-radius: 28px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-        border-left: 5px solid var(--purple-prime);
-    }
 </style>
 """, unsafe_allow_html=True)
 # ==========================================
 # NYX DETERMINISTIC KERNEL
 # ==========================================
 class CognitiveState:
-    """The 10 interacting psychological variables (0.0 to 1.0)"""
     def __init__(self, seed=42):
         self.rng = np.random.default_rng(seed)
         self.self_worth = self.rng.uniform(0.4, 0.8)
@@ -158,21 +148,17 @@ class CognitiveState:
         return {k: round(v, 3) for k, v in self.__dict__.items() if k != 'rng'}
 
 class NyxKernel:
-    """Owns all state transitions. Fully deterministic."""
     def __init__(self, agent_names, seed=42):
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.agents = {name: CognitiveState(seed + i) for i, name in enumerate(agent_names)}
         self.names = agent_names
         self.n = len(agent_names)
-        
-        # Influence Network W[i][j] - Directed graph
         self.W = self.rng.uniform(0.1, 0.3, (self.n, self.n))
         np.fill_diagonal(self.W, 0.0)
 
     def update_cognitive_state(self, agent_name, social_pressure, contradiction_exposure):
         state = self.agents[agent_name]
-        
         state.anxiety = np.clip(state.anxiety + 0.1 * social_pressure + 0.2 * contradiction_exposure, 0, 1)
         state.consistency = np.clip(state.consistency - 0.15 * state.anxiety, 0, 1)
         state.energy = np.clip(state.energy - 0.05 - 0.1 * state.anxiety, 0, 1)
@@ -195,10 +181,8 @@ class NyxKernel:
         for i, name in enumerate(self.names):
             social_pressure = np.dot(self.W[i], [self.agents[n].momentum for n in self.names])
             contradiction = self.rng.uniform(0, 0.3) 
-            
             mode = self.update_cognitive_state(name, social_pressure, contradiction)
             modes[name] = ["AVOID", "RECOVER", "EXECUTE", "OPTIMIZE"][mode]
-            
             for j, other in enumerate(self.names):
                 if i != j:
                     self.W[i][j] = np.clip(self.W[i][j] + 0.01 * self.agents[name].momentum, 0, 1)
@@ -227,27 +211,18 @@ if "simulation_complete" not in st.session_state:
 if "nyx_kernel" not in st.session_state:
     st.session_state.nyx_kernel = None
 
-KG_FILE = "nyx_knowledge.json"
-def load_kg():
-    if os.path.exists(KG_FILE):
-        with open(KG_FILE, "r") as f: return json.load(f)
-    return {"debates": [], "entities": {}, "agent_insights": {}}
-
-def save_kg(kg):
-    with open(KG_FILE, "w") as f: json.dump(kg, f, indent=2)
-
 # ==========================================
 # API PROVIDERS & FALLBACK
 # ==========================================
 PROVIDERS = [
-    {"name": "Groq",           "key": st.secrets.get("GROQ_API_KEY"),           "base": "https://api.groq.com/openai/v1",                  "model": "llama-3.3-70b-versatile"},
-    {"name": "SambaNova",      "key": st.secrets.get("SAMBA_API_KEY"),          "base": "https://api.sambanova.ai/v1",                     "model": "Meta-Llama-3.3-70B-Instruct"},
-    {"name": "Cerebras",       "key": st.secrets.get("CEREBRAS_API_KEY"),       "base": "https://api.cerebras.ai/v1",                      "model": "llama-3.3-70b"},
-    {"name": "Google",         "key": st.secrets.get("GEMINI_API_KEY"),         "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.5-flash"},
-    {"name": "Mistral",        "key": st.secrets.get("MISTRAL_API_KEY"),        "base": "https://api.mistral.ai/v1",                       "model": "mistral-small-4"},
-    {"name": "Cohere",         "key": st.secrets.get("COHERE_API_KEY"),         "base": "https://api.cohere.ai/compatibility/v1",          "model": "command-a-03-2025"},
-    {"name": "OpenRouter",     "key": st.secrets.get("OPENROUTER_API_KEY"),     "base": "https://openrouter.ai/api/v1",                    "model": "openrouter/free"},
-    {"name": "HuggingFace",    "key": st.secrets.get("HF_API_KEY"),             "base": "https://api-inference.huggingface.co/v1",         "model": "meta-llama/Llama-3.3-70B-Instruct"},
+    {"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
+    {"name": "SambaNova", "key": st.secrets.get("SAMBA_API_KEY"), "base": "https://api.sambanova.ai/v1", "model": "Meta-Llama-3.3-70B-Instruct"},
+    {"name": "Cerebras", "key": st.secrets.get("CEREBRAS_API_KEY"), "base": "https://api.cerebras.ai/v1", "model": "llama-3.3-70b"},
+    {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.5-flash"},
+    {"name": "Mistral", "key": st.secrets.get("MISTRAL_API_KEY"), "base": "https://api.mistral.ai/v1", "model": "mistral-small-4"},
+    {"name": "Cohere", "key": st.secrets.get("COHERE_API_KEY"), "base": "https://api.cohere.ai/compatibility/v1", "model": "command-a-03-2025"},
+    {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/free"},
+    {"name": "HuggingFace", "key": st.secrets.get("HF_API_KEY"), "base": "https://api-inference.huggingface.co/v1", "model": "meta-llama/Llama-3.3-70B-Instruct"},
 ]
 
 def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False):
@@ -257,28 +232,37 @@ def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False)
         providers = PROVIDERS
         
     for p in providers:
-        if not p["key"]: continue
+        if not p["key"]: 
+            continue
         try:
             if p["name"] == "Google":
                 import google.generativeai as genai
                 genai.configure(api_key=p["key"])
-                model = genai.GenerativeModel(p["model"])                full_prompt = f"{system}\n\n{prompt}" if system else prompt
+                model = genai.GenerativeModel(p["model"])
+                full_prompt = f"{system}\n\n{prompt}" if system else prompt
                 resp = model.generate_content(full_prompt)
                 return resp.text.strip(), p["name"]
             else:
                 client = OpenAI(api_key=p["key"], base_url=p["base"])
                 messages = []
-                if system: messages.append({"role": "system", "content": system})
+                if system: 
+                    messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-                resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.4, max_tokens=250)
+                resp = client.chat.completions.create(
+                    model=p["model"], 
+                    messages=messages, 
+                    temperature=0.4, 
+                    max_tokens=250
+                )
                 return resp.choices[0].message.content.strip(), p["name"]
-        except:
+        except Exception:
             continue
             
-    if silent_fail: return "Unable to generate response.", "None"
+    if silent_fail: 
+        return "Unable to generate response.", "None"
+        
     st.warning("All providers temporarily unavailable.")
     return "Response unavailable.", "None"
-
 # ==========================================
 # AUTO-ROUTING & TONE
 # ==========================================
@@ -305,13 +289,19 @@ def auto_select_agents(topic):
             if kw in topic.lower() and agent not in selected:
                 selected.append(agent)
                 break
-    if len(selected) < 3: selected = ["Harsh", "Jayant", "Ahany", "Nish"]
+    if len(selected) < 3: 
+        selected = ["Harsh", "Jayant", "Ahany", "Nish"]
     return selected
 
 def auto_detect_tone(topic):
-    if "?" in topic: return "Casual"
-    if any(w in topic.lower() for w in ["prove", "evidence", "study"]): return "Academic"
-    if any(w in topic.lower() for w in ["brutal", "harsh", "destroy"]): return "Brutal"    return "Neutral"
+    if "?" in topic: 
+        return "Casual"
+    if any(w in topic.lower() for w in ["prove", "evidence", "study"]): 
+        return "Academic"
+    if any(w in topic.lower() for w in ["brutal", "harsh", "destroy"]): 
+        return "Brutal"
+    return "Neutral"
+
 # ==========================================
 # AGENTS (MODIFIED FOR DETERMINISTIC BINDING)
 # ==========================================
@@ -322,8 +312,7 @@ class Agent:
 
     def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, cognitive_state, behavioral_mode):
         history = "\n".join(self.history[-2:]) or "No previous chat."
-        state_str = ", ".join([f"{k}: {v}" for k, v in cognitive_state.items()])
-        
+        state_str = ", ".join([f"{k}: {v}" for k, v in cognitive_state.items()])        
         system = f"""You are {self.name} ({self.role}). {self.personality}. Respond in a {tone} tone.
         CRITICAL INSTRUCTION: Your internal cognitive state is currently: [{state_str}]. 
         Your current behavioral mode is: [{behavioral_mode}].
@@ -371,8 +360,8 @@ def create_panel(selected_agents):
     agents, moderator = [], None
     for agent_data in ALL_AGENTS:
         name = agent_data[0]
-        if name not in selected_agents: continue
-        role, personality, avatar, card_class = agent_data[1], agent_data[2], agent_data[3], agent_data[4]
+        if name not in selected_agents: 
+            continue        role, personality, avatar, card_class = agent_data[1], agent_data[2], agent_data[3], agent_data[4]
         if len(agent_data) == 6 and agent_data[5]:
             moderator = Moderator(name, role, personality, avatar, card_class)
         else:
@@ -538,4 +527,3 @@ if st.session_state.simulation_complete and st.session_state.nyx_kernel:
         with c3:
             if st.button("Generate Counterfactual"):
                 st.success("Counterfactual: System reaches consensus 2 rounds earlier if initial anxiety is reduced by 20%.")
-
