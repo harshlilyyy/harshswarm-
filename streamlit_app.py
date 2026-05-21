@@ -1,15 +1,15 @@
+# =============================================================================
+# PART 1 of 3 — Copy everything below into your app.py (top)
+# =============================================================================
 import streamlit as st
 import time
-import re
 import json
-import os
 import random
 import math
 from datetime import datetime
-from collections import defaultdict
 import pandas as pd
 
-# Optional imports – used only for advanced visuals
+# Optional imports (only used if installed)
 try:
     import networkx as nx
     import matplotlib.pyplot as plt
@@ -120,16 +120,17 @@ if "debate_winner" not in st.session_state:
     st.session_state.debate_winner = ""
 
 # =============================================================================
-# DETERMINISTIC KERNEL (inlined)
+# DETERMINISTIC KERNEL (inlined) — No external files needed
 # =============================================================================
 def mulberry32(seed):
-    state = seed | 0
+    """Seeded PRNG (0-1). Python-compatible, no JS >>> needed."""
+    state = seed & 0xFFFFFFFF
     def next():
         nonlocal state
-        state = (state + 0x6D2B79F5) | 0
+        state = (state + 0x6D2B79F5) & 0xFFFFFFFF
         t = math.imul(state ^ (state >> 15), 1 | state)
-        t = (t + math.imul(t ^ (t >> 7), 61 | t)) ^ t
-        return ((t ^ (t >> 14)) >>> 0) / 4294967296
+        t = (t + math.imul(t ^ (t >> 7), 61 | t)) & 0xFFFFFFFF
+        return (t ^ (t >> 14)) / 4294967296
     return next
 
 class CognitiveAgent:
@@ -138,7 +139,7 @@ class CognitiveAgent:
         self.role = role
         self.personality = personality
         self.rng = rng if rng else random.Random()
-        # 10 core variables (0-1)
+        # 10 core variables (0–1)
         self.self_worth = 0.5 + self.rng.random() * 0.2 - 0.1
         self.anxiety = 0.2 + self.rng.random() * 0.2
         self.consistency = 0.5 + self.rng.random() * 0.2 - 0.1
@@ -160,7 +161,7 @@ class CognitiveAgent:
         return max(0, min(1, val))
 
     def update(self, progress, peer_gap, social_feedback, failure_flag, success_flag, mentor_flag=False):
-        # Self-worth
+        # Self‑worth
         self.self_worth = self.clamp(self.self_worth + 0.25*progress - 0.3*max(peer_gap,0) +
                                       0.15*social_feedback - 0.2*failure_flag)
         # Anxiety (less smoothing)
@@ -178,7 +179,7 @@ class CognitiveAgent:
                                              0.15*mentor_flag)
         # Fragility
         self.fragility_index = self.clamp(self.fragility_index + 0.1*failure_flag)
-        # Lock-in
+        # Lock‑in
         self.lock_in = self.clamp(self.lock_in + 0.1*self.consistency)
         # Learning rate
         self.learning_rate = self.clamp(self.learning_rate + 0.1*failure_flag - 0.05*success_flag)
@@ -203,9 +204,13 @@ class CognitiveAgent:
             self.mode = "EXECUTE"
         else:
             self.mode = "OPTIMIZE"
+# =============================================================================
+# PART 2 of 3 — Paste below Part 1
+# =============================================================================
+
 # ---------- API PROVIDERS (from st.secrets ONLY) ----------
 def get_providers():
-    """Return providers that have a corresponding st.secrets key."""
+    """Return only providers for which the corresponding secret exists."""
     all_providers = [
         {"name": "Groq",           "key_name": "GROQ_API_KEY",
                                    "base": "https://api.groq.com/openai/v1",                        "model": "llama-3.3-70b-versatile"},
@@ -226,7 +231,7 @@ def get_providers():
     ]
     available = []
     for p in all_providers:
-        key = st.secrets.get(p["key_name"])  # returns None if not set
+        key = st.secrets.get(p["key_name"])
         if key:
             available.append({**p, "key": key})
     return available
@@ -237,6 +242,7 @@ def generate_with_fallback(prompt, system="", preferred=None):
     if not providers:
         return "No API keys configured. Add them in Streamlit secrets.", "None"
     if preferred:
+        # Try preferred first, then the rest
         providers = [p for p in providers if p["name"] == preferred] + [p for p in providers if p["name"] != preferred]
     for p in providers:
         try:
@@ -265,7 +271,7 @@ def generate_with_fallback(prompt, system="", preferred=None):
                     model=p["model"], messages=messages, temperature=0.7, max_tokens=200
                 )
                 return resp.choices[0].message.content.strip(), p["name"]
-        except Exception as e:
+        except Exception:
             time.sleep(0.5)
             continue
     return "All providers temporarily unavailable.", "None"
@@ -302,7 +308,7 @@ def run_standard_debate(topic, agents_text, rounds, preferred_provider=None):
             msg, provider = agent.speak(topic, last_msg, r, preferred_provider)
             log.append(f"**Round {r} – {agent.name}** (via {provider}): {msg}")
             last_msg = msg
-    # Simple winner heuristic (longest avg message)
+    # Simple winner heuristic: longest average argument length
     winner = max(agents, key=lambda a: sum(len(m) for m in a.history)/max(1,len(a.history))).name
     return log, winner
 
@@ -311,7 +317,7 @@ def run_simulation(agent_names, rounds=4, seed=42):
     rng = random.Random(seed)
     agents = [CognitiveAgent(name, rng=rng) for name in agent_names]
     state_history = []
-    # Initial round
+    # Initial round (neutral)
     for a in agents:
         a.update(0.5, 0.5, 0.0, 0, 0)
     for _ in range(rounds):
@@ -328,7 +334,8 @@ def run_simulation(agent_names, rounds=4, seed=42):
                 "self_worth": a.self_worth, "anxiety": a.anxiety, "consistency": a.consistency,
                 "momentum": a.momentum, "reputation": a.reputation,
                 "opportunity_access": a.opportunity_access, "fragility_index": a.fragility_index,
-                "lock_in": a.lock_in, "learning_rate": a.learning_rate, "energy": a.energy, "mode": a.mode
+                "lock_in": a.lock_in, "learning_rate": a.learning_rate, "energy": a.energy,
+                "mode": a.mode
             }
         state_history.append(round_states)
     # Outcome vector
@@ -368,7 +375,7 @@ def show_outcomes(sim_result):
     outcome = sim_result["outcome_vector"]
     agents = sim_result["agents"]
     st.markdown("## 📊 Strategic Forecast")
-    st.metric("Winner", "Nuanced middle ground")  # placeholder
+    st.metric("Winner", "Nuanced middle ground")   # placeholder
     st.metric("Confidence", "72%")
     with st.expander("Confidence Rubric"):
         st.write("**Feasibility:** 7/10  |  **Alignment:** 6/10  |  **Risk:** 7/10  |  **Evidence:** 8/10")
@@ -378,12 +385,12 @@ def show_outcomes(sim_result):
     c2.metric("Inequality", f"{outcome['inequality']:.4f}")
     c3.metric("Trust Proxy", f"{outcome['trust_proxy']:.3f}")
     c4.metric("Centralization", f"{outcome['centralization']:.3f}")
-    # BlackSwan Assassin
+    # BlackSwan Assassin (simplified)
     with st.expander("🕵️ BlackSwan Assassin"):
         st.write("**Assumption:** Debate remains rational.")
         st.write("**Why fragile:** Emotional anecdotes may spike anxiety.")
         st.write("**Break scenario:** A student shares a personal story → anxiety +20%.")
-    # Counterfactual
+    # Counterfactual sensitivity
     with st.expander("🧪 Counterfactual Sensitivity"):
         if st.button("Run +20% Anxiety Perturbation"):
             perturb_seed = sim_result["seed"] + 1000
@@ -407,7 +414,10 @@ def show_outcomes(sim_result):
             st.write(f"🔁 **{a.name}** – Success chain ×{a.success_streak}")
     report = json.dumps({"outcome": outcome, "seed": sim_result["seed"]}, indent=2, default=str)
     st.download_button("📥 Download Full Report", report, file_name="nyx_report.json")
-# ---------- SIDEBAR ----------
+# =============================================================================
+# PART 3 of 3 — Paste at the end (sidebar + main page)
+# =============================================================================
+
 with st.sidebar:
     st.markdown("### 💜 Nyx Engine")
     st.markdown("---")
