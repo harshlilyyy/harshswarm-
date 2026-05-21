@@ -20,6 +20,7 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif;background:var(--bg);col
 .card-skeptic{border-left:5px solid #E63946;}.card-optimist{border-left:5px solid #9B4DFF;}.card-philosopher{border-left:5px solid #C77DFF;}.card-futurist{border-left:5px solid #FF4D6D;}.card-data{border-left:5px solid #5E60CE;}.card-ethicist{border-left:5px solid #FF6B6B;}.card-policy{border-left:5px solid #F06595;}.card-conspiracy{border-left:5px solid #845EF7;}.card-psychologist{border-left:5px solid #F06595;}.card-economist{border-left:5px solid #DA77F2;}.card-technologist{border-left:5px solid #748FFC;}.card-legal{border-left:5px solid #FF8787;}.card-moderator{border-left:5px solid #E63946;}
 </style>
 """, unsafe_allow_html=True)
+
 class CognitiveState:
     def __init__(self, seed=42):
         self.rng = np.random.default_rng(seed)
@@ -37,8 +38,7 @@ class CognitiveState:
     def to_dict(self):
         out = {}
         for k, v in self.__dict__.items():
-            if k != 'rng':
-                out[k] = round(v, 3)
+            if k != 'rng': out[k] = round(v, 3)
         return out
 
 class NyxKernel:
@@ -47,8 +47,7 @@ class NyxKernel:
         self.rng = np.random.default_rng(seed)
         self.agents = {}
         for i, name in enumerate(agent_names):
-            self.agents[name] = CognitiveState(seed + i)
-        self.names = agent_names
+            self.agents[name] = CognitiveState(seed + i)        self.names = agent_names
         self.n = len(agent_names)
         self.W = self.rng.uniform(0.1, 0.3, (self.n, self.n))
         np.fill_diagonal(self.W, 0.0)
@@ -87,7 +86,9 @@ class NyxKernel:
         reps = [a.reputation for a in self.agents.values()]
         anx = [a.anxiety for a in self.agents.values()]
         frag = [a.fragility_index for a in self.agents.values()]
-        return {"reputation_mean": round(float(np.mean(reps)), 3), "inequality": round(float(np.std(reps)), 3), "polarization_score": round(float(np.std(anx) * 2), 3), "system_health": round(float(1.0 - np.mean(frag)), 3)}if "debate_history" not in st.session_state:
+        return {"reputation_mean": round(float(np.mean(reps)), 3), "inequality": round(float(np.std(reps)), 3), "polarization_score": round(float(np.std(anx) * 2), 3), "system_health": round(float(1.0 - np.mean(frag)), 3)}
+
+if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 if "simulation_complete" not in st.session_state:
     st.session_state.simulation_complete = False
@@ -95,7 +96,6 @@ if "nyx_kernel" not in st.session_state:
     st.session_state.nyx_kernel = None
 
 PROVIDERS = [{"name": "Groq", "key": st.secrets.get("GROQ_API_KEY"), "base": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"}, {"name": "Google", "key": st.secrets.get("GEMINI_API_KEY"), "base": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"}, {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "base": "https://openrouter.ai/api/v1", "model": "openrouter/free"}]
-
 def generate_with_fallback(prompt, system="", preferred=None):
     for p in PROVIDERS:
         if not p["key"]: continue
@@ -145,8 +145,8 @@ def create_panel(selected_agents):
         if data[0] not in selected_agents: continue
         if len(data) == 6 and data[5]: moderator = Moderator(data[0], data[1], data[2], data[3], data[4])
         else: agents.append(Agent(data[0], data[1], data[2], data[3], data[4]))
-    if moderator: agents.insert(1, moderator) if len(agents) >= 1 else agents.append(moderator)
-    return agents
+    if moderator: agents.insert(1, moderator) if len(agents) >= 1 else agents.append(moderator)    return agents
+
 with st.sidebar:
     st.markdown("### 💜 Nyx\n---\n### 🤖 Kernel")
     model_opts = ["🤖 Auto"] + [p["name"] for p in PROVIDERS]
@@ -194,8 +194,7 @@ with st.container():
                         reply, provider = agent.speak(topic, last_msg, r+1, preferred, tone, cog_state, mode)
                         st.session_state.debate_history.append({"round": r+1, "agent": agent.name, "avatar": agent.avatar, "mode": mode, "text": reply, "provider": provider, "card_class": agent.card_class})
                         last_msg = reply
-                progress_bar.progress((r + 1) / num_rounds)
-            status_text.success("Simulation Complete.")
+                progress_bar.progress((r + 1) / num_rounds)            status_text.success("Simulation Complete.")
             st.session_state.simulation_complete = True
             time.sleep(1)
             st.rerun()
