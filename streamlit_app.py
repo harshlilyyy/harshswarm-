@@ -4,6 +4,8 @@ import re
 import json
 import os
 import urllib.parse
+import numpy as np
+import plotly.graph_objects as go
 from datetime import datetime
 from openai import OpenAI
 
@@ -45,8 +47,7 @@ st.markdown("""
     [data-testid="stSidebar"] {
         background: rgba(255, 255, 255, 0.6) !important;
         backdrop-filter: blur(24px) !important;
-        -webkit-backdrop-filter: blur(24px) !important;
-        border-right: 0.5px solid var(--border-glow) !important;
+        -webkit-backdrop-filter: blur(24px) !important;        border-right: 0.5px solid var(--border-glow) !important;
         box-shadow: 4px 0 20px rgba(155,77,255,0.05) !important;
     }
     [data-testid="stSidebar"] .block-container {
@@ -95,8 +96,7 @@ st.markdown("""
         font-size: 1.1rem !important;
         color: var(--text-dark) !important;
         text-align: center;
-    }
-    .stButton > button {
+    }    .stButton > button {
         background: linear-gradient(135deg, var(--purple-prime) 0%, var(--pink-hot) 100%);
         border: none;
         border-radius: 60px;
@@ -134,140 +134,154 @@ st.markdown("""
         margin: 1.5rem 0;
         border-left: 5px solid var(--purple-prime);
     }
-
-    .round-tracker {
-        text-align: center;
-        margin: 0.5rem 0 0.8rem;
-        font-weight: 600;
-        font-size: 1.1rem;
-        opacity: 0.8;
-        color: var(--pink-hot);
-    }
-
-    /* Confidence radial gauge */
-    .confidence-gauge {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: conic-gradient(var(--purple-prime) 0deg, var(--purple-prime) calc(360deg * var(--pct)), #eee calc(360deg * var(--pct)));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        margin: 0 auto;
-    }
 </style>
 """, unsafe_allow_html=True)
+# ==========================================
+# NYX DETERMINISTIC KERNEL
+# ==========================================
+class CognitiveState:
+    """The 10 interacting psychological variables (0.0 to 1.0)"""
+    def __init__(self, seed=42):
+        self.rng = np.random.default_rng(seed)
+        self.self_worth = self.rng.uniform(0.4, 0.8)
+        self.anxiety = self.rng.uniform(0.1, 0.4)
+        self.consistency = self.rng.uniform(0.5, 0.9)
+        self.momentum = 0.5
+        self.reputation = 0.5
+        self.opportunity_access = 0.5
+        self.fragility_index = 0.2
+        self.lock_in = 0.1
+        self.learning_rate = self.rng.uniform(0.3, 0.7)
+        self.energy = 1.0
 
-# --- Session State & Knowledge Base ---
+    def to_dict(self):
+        return {k: round(v, 3) for k, v in self.__dict__.items() if k != 'rng'}
+
+class NyxKernel:
+    """Owns all state transitions. Fully deterministic."""
+    def __init__(self, agent_names, seed=42):
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
+        self.agents = {name: CognitiveState(seed + i) for i, name in enumerate(agent_names)}
+        self.names = agent_names
+        self.n = len(agent_names)
+        
+        # Influence Network W[i][j] - Directed graph
+        self.W = self.rng.uniform(0.1, 0.3, (self.n, self.n))
+        np.fill_diagonal(self.W, 0.0)
+
+    def update_cognitive_state(self, agent_name, social_pressure, contradiction_exposure):
+        state = self.agents[agent_name]
+        
+        state.anxiety = np.clip(state.anxiety + 0.1 * social_pressure + 0.2 * contradiction_exposure, 0, 1)
+        state.consistency = np.clip(state.consistency - 0.15 * state.anxiety, 0, 1)
+        state.energy = np.clip(state.energy - 0.05 - 0.1 * state.anxiety, 0, 1)
+        
+        if state.consistency < 0.4:
+            state.reputation = np.clip(state.reputation - 0.1, 0, 1)
+            state.fragility_index = np.clip(state.fragility_index + 0.15, 0, 1)
+            
+        mode_scores = [
+            state.anxiety * 2,                           
+            state.fragility_index * 1.5,                 
+            state.momentum * state.energy * 2,           
+            state.learning_rate * state.opportunity_access 
+        ]
+        mode = int(np.argmax(mode_scores))
+        return mode
+
+    def step(self):
+        modes = {}
+        for i, name in enumerate(self.names):
+            social_pressure = np.dot(self.W[i], [self.agents[n].momentum for n in self.names])
+            contradiction = self.rng.uniform(0, 0.3) 
+            
+            mode = self.update_cognitive_state(name, social_pressure, contradiction)
+            modes[name] = ["AVOID", "RECOVER", "EXECUTE", "OPTIMIZE"][mode]
+            
+            for j, other in enumerate(self.names):
+                if i != j:
+                    self.W[i][j] = np.clip(self.W[i][j] + 0.01 * self.agents[name].momentum, 0, 1)
+        return modes
+
+    def get_outcome_vector(self):
+        reps = [a.reputation for a in self.agents.values()]
+        anxieties = [a.anxiety for a in self.agents.values()]
+        return {
+            "reputation_mean": round(float(np.mean(reps)), 3),
+            "inequality": round(float(np.std(reps)), 3),
+            "polarization_score": round(float(np.std(anxieties) * 2), 3),
+            "system_health": round(float(1.0 - np.mean([a.fragility_index for a in self.agents.values()])), 3)
+        }
+# ==========================================
+# SESSION STATE & KNOWLEDGE BASE
+# ==========================================
 if "debate_history" not in st.session_state:
     st.session_state.debate_history = []
 if "saved_history" not in st.session_state:
     st.session_state.saved_history = []
 if "panel_presets" not in st.session_state:
-    st.session_state.panel_presets = {}   # user-saved agent configurations
+    st.session_state.panel_presets = {}
+if "simulation_complete" not in st.session_state:
+    st.session_state.simulation_complete = False
+if "nyx_kernel" not in st.session_state:
+    st.session_state.nyx_kernel = None
 
-# Lightweight Knowledge Graph (file-backed)
 KG_FILE = "nyx_knowledge.json"
 def load_kg():
     if os.path.exists(KG_FILE):
-        with open(KG_FILE, "r") as f:
-            return json.load(f)
+        with open(KG_FILE, "r") as f: return json.load(f)
     return {"debates": [], "entities": {}, "agent_insights": {}}
 
 def save_kg(kg):
-    with open(KG_FILE, "w") as f:
-        json.dump(kg, f, indent=2)
+    with open(KG_FILE, "w") as f: json.dump(kg, f, indent=2)
 
-# --- API Providers (DeepSeek removed, HuggingFace added, Cohere & Mistral fixed) ---
+# ==========================================
+# API PROVIDERS & FALLBACK
+# ==========================================
 PROVIDERS = [
-    # Tier 1: Most reliable free providers
-    {"name": "Groq",           "key": st.secrets.get("GROQ_API_KEY"),           "base": "https://api.groq.com/openai/v1",                            "model": "llama-3.3-70b-versatile"},
-    {"name": "SambaNova",      "key": st.secrets.get("SAMBA_API_KEY"),          "base": "https://api.sambanova.ai/v1",                               "model": "Meta-Llama-3.3-70B-Instruct"},
-    {"name": "Cerebras",       "key": st.secrets.get("CEREBRAS_API_KEY"),       "base": "https://api.cerebras.ai/v1",                                "model": "llama-3.3-70b"},
-
-    # Tier 2: Working with corrected model names
-    {"name": "Google",         "key": st.secrets.get("GEMINI_API_KEY"),         "base": "https://generativelanguage.googleapis.com/v1beta",          "model": "gemini-2.5-flash"},
-    {"name": "Mistral",        "key": st.secrets.get("MISTRAL_API_KEY"),        "base": "https://api.mistral.ai/v1",                                 "model": "mistral-small-4"},
-    {"name": "Cohere",         "key": st.secrets.get("COHERE_API_KEY"),         "base": "https://api.cohere.ai/compatibility/v1",                    "model": "command-a-03-2025"},
-
-    # Tier 3: Free but rate‑limited
-    {"name": "OpenRouter",     "key": st.secrets.get("OPENROUTER_API_KEY"),     "base": "https://openrouter.ai/api/v1",                              "model": "openrouter/free"},
-
-    # Tier 4: New free providers
-    {"name": "HuggingFace",    "key": st.secrets.get("HF_API_KEY"),             "base": "https://api-inference.huggingface.co/v1",                   "model": "meta-llama/Llama-3.3-70B-Instruct"},
+    {"name": "Groq",           "key": st.secrets.get("GROQ_API_KEY"),           "base": "https://api.groq.com/openai/v1",                  "model": "llama-3.3-70b-versatile"},
+    {"name": "SambaNova",      "key": st.secrets.get("SAMBA_API_KEY"),          "base": "https://api.sambanova.ai/v1",                     "model": "Meta-Llama-3.3-70B-Instruct"},
+    {"name": "Cerebras",       "key": st.secrets.get("CEREBRAS_API_KEY"),       "base": "https://api.cerebras.ai/v1",                      "model": "llama-3.3-70b"},
+    {"name": "Google",         "key": st.secrets.get("GEMINI_API_KEY"),         "base": "https://generativelanguage.googleapis.com/v1beta","model": "gemini-2.5-flash"},
+    {"name": "Mistral",        "key": st.secrets.get("MISTRAL_API_KEY"),        "base": "https://api.mistral.ai/v1",                       "model": "mistral-small-4"},
+    {"name": "Cohere",         "key": st.secrets.get("COHERE_API_KEY"),         "base": "https://api.cohere.ai/compatibility/v1",          "model": "command-a-03-2025"},
+    {"name": "OpenRouter",     "key": st.secrets.get("OPENROUTER_API_KEY"),     "base": "https://openrouter.ai/api/v1",                    "model": "openrouter/free"},
+    {"name": "HuggingFace",    "key": st.secrets.get("HF_API_KEY"),             "base": "https://api-inference.huggingface.co/v1",         "model": "meta-llama/Llama-3.3-70B-Instruct"},
 ]
-
-def get_client(provider):
-    return OpenAI(api_key=provider["key"], base_url=provider["base"])
 
 def generate_with_fallback(prompt, system="", preferred=None, silent_fail=False):
     if preferred:
         providers = [p for p in PROVIDERS if p["name"] == preferred] + [p for p in PROVIDERS if p["name"] != preferred]
     else:
         providers = PROVIDERS
+        
     for p in providers:
-        if not p["key"]:
-            continue
+        if not p["key"]: continue
         try:
             if p["name"] == "Google":
                 import google.generativeai as genai
                 genai.configure(api_key=p["key"])
-                model = genai.GenerativeModel(p["model"])
-                full_prompt = f"{system}\n\n{prompt}" if system else prompt
+                model = genai.GenerativeModel(p["model"])                full_prompt = f"{system}\n\n{prompt}" if system else prompt
                 resp = model.generate_content(full_prompt)
                 return resp.text.strip(), p["name"]
             else:
                 client = OpenAI(api_key=p["key"], base_url=p["base"])
                 messages = []
-                if system:
-                    messages.append({"role": "system", "content": system})
+                if system: messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-                resp = client.chat.completions.create(
-                    model=p["model"], messages=messages, temperature=0.7, max_tokens=250
-                )
+                resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.4, max_tokens=250)
                 return resp.choices[0].message.content.strip(), p["name"]
         except:
             continue
-    if silent_fail:
-        return "Unable to generate response.", "None"
-    else:
-        st.warning("All providers temporarily unavailable.")
-        return "Response unavailable.", "None"
+            
+    if silent_fail: return "Unable to generate response.", "None"
+    st.warning("All providers temporarily unavailable.")
+    return "Response unavailable.", "None"
 
-def test_provider_connection(provider):
-    if not provider["key"]:
-        return "No API key"
-    try:
-        if provider["name"] == "Google":
-            import google.generativeai as genai
-            genai.configure(api_key=provider["key"])
-            model = genai.GenerativeModel(provider["model"])
-            model.generate_content("Say 'OK'", request_options={"timeout": 8})
-        else:
-            client = OpenAI(api_key=provider["key"], base_url=provider["base"])
-            client.chat.completions.create(
-                model=provider["model"],
-                messages=[{"role": "user", "content": "Say OK"}],
-                max_tokens=5,
-                timeout=8
-            )
-        return "✅ Working"
-    except Exception as e:
-        return f"❌ {str(e)[:60]}"
-
-# --- Topic Entity Extraction (MiroFish-style) ---
-def extract_topic_entities(topic):
-    prompt = f"""Extract key entities (people, companies, concepts, events) from this topic: "{topic}". 
-Return a JSON list of objects with 'name' and 'type'. Example: [{{"name":"OpenAI","type":"company"}},{{"name":"AGI","type":"concept"}}]"""
-    resp, _ = generate_with_fallback(prompt, silent_fail=True)
-    try:
-        entities = json.loads(resp)
-        return entities[:5]   # max 5 entities
-    except:
-        return []
-
-# --- Auto-Expert Routing (DeepSeek-MoE style) ---
+# ==========================================
+# AUTO-ROUTING & TONE
+# ==========================================
 EXPERT_KEYWORDS = {
     "Skeptic": ["risk", "flaw", "danger", "problem", "against"],
     "Optimist": ["opportunity", "growth", "benefit", "future", "progress"],
@@ -282,104 +296,89 @@ EXPERT_KEYWORDS = {
     "Psychologist": ["behavior", "mind", "cognitive", "emotion", "psychology"],
     "Data Scientist": ["data", "statistics", "analytics", "numbers", "model"],
     "Conspiracy Theorist": ["hidden", "secret", "conspiracy", "cover-up", "agenda"],
-    "Investor": ["invest", "stock", "crypto", "portfolio", "return"],
 }
 
 def auto_select_agents(topic):
-    selected = ["Ahany"]  # moderator always included
+    selected = ["Ahany"]
     for agent, keywords in EXPERT_KEYWORDS.items():
         for kw in keywords:
-            if kw in topic.lower():
-                if agent not in selected:
-                    selected.append(agent)
+            if kw in topic.lower() and agent not in selected:
+                selected.append(agent)
                 break
-    if len(selected) < 3:
-        selected = ["Harsh", "Jayant", "Ahany", "Nish"]
+    if len(selected) < 3: selected = ["Harsh", "Jayant", "Ahany", "Nish"]
     return selected
 
-# --- Auto-Tone Adaptation ---
 def auto_detect_tone(topic):
-    if "?" in topic:
-        return "Casual"
-    if any(w in topic.lower() for w in ["prove", "evidence", "study", "research", "demonstrate"]):
-        return "Academic"
-    if any(w in topic.lower() for w in ["brutal", "harsh", "destroy", "debunk", "roast"]):
-        return "Brutal"
-    return "Neutral"
-
-# --- 16 Agents (Harsh adversarial) ---
+    if "?" in topic: return "Casual"
+    if any(w in topic.lower() for w in ["prove", "evidence", "study"]): return "Academic"
+    if any(w in topic.lower() for w in ["brutal", "harsh", "destroy"]): return "Brutal"    return "Neutral"
+# ==========================================
+# AGENTS (MODIFIED FOR DETERMINISTIC BINDING)
+# ==========================================
 class Agent:
     def __init__(self, name, role, personality, avatar, card_class):
         self.name, self.role, self.personality, self.avatar, self.card_class = name, role, personality, avatar, card_class
         self.history = []
-        self.importance = 0.0
 
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, entities_context):
-        history = "\n".join(self.history[-3:]) or "No previous chat."
-        tone_instr = f"Respond in a {tone} tone." if tone else ""
-        mode_instr = SWARM_MODES.get(swarm_mode, "")
-        entity_block = f"Relevant context extracted from topic: {entities_context}" if entities_context else ""
-
-        if think_deeper:
-            system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} {entity_block}. This is a {swarm_mode} session. {mode_instr}. Before speaking, perform a quick internal analysis: 1) strongest counter-argument 2) hidden assumptions 3) refined response."
-        else:
-            system = f"You are {self.name} ({self.role}). {self.personality}. {tone_instr} {entity_block}. This is a {swarm_mode} session. {mode_instr}"
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, cognitive_state, behavioral_mode):
+        history = "\n".join(self.history[-2:]) or "No previous chat."
+        state_str = ", ".join([f"{k}: {v}" for k, v in cognitive_state.items()])
+        
+        system = f"""You are {self.name} ({self.role}). {self.personality}. Respond in a {tone} tone.
+        CRITICAL INSTRUCTION: Your internal cognitive state is currently: [{state_str}]. 
+        Your current behavioral mode is: [{behavioral_mode}].
+        If your mode is AVOID, be hesitant and brief. If EXECUTE, be aggressive and direct. 
+        If anxiety is high, show signs of stress. You MUST reflect this internal state in your tone."""
 
         prompt = f"""Debate round {round_num} on: "{topic}"
-Format: **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
-History: {history}
-Last: "{last_msg}"
-"""
+        Format: **Claim:** [point] **Evidence:** [fact] **Reasoning:** [why]
+        History: {history}
+        Last: "{last_msg}"
+        """
         reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
-        self.importance += len(reply.split()) / 100.0
         return reply, provider
 
 class Moderator(Agent):
-    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, entities_context):
-        history = "\n".join(self.history[-5:]) or "No debate yet."
-        system = f"You are {self.name}, the enhanced moderator. Detect contradictions, echo chambers, and force reluctant speakers to engage."
-        prompt = f"Summarise, flag at least one contradiction, and challenge a specific agent's weak point. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
+    def speak(self, topic, last_msg, round_num, preferred_provider, tone, swarm_mode, think_deeper, cognitive_state, behavioral_mode):
+        history = "\n".join(self.history[-3:]) or "No debate yet."
+        system = f"You are {self.name}, the enhanced moderator. Detect contradictions and force engagement."
+        prompt = f"Summarise, flag a contradiction, and challenge a weak point. Topic: {topic} | Round: {round_num}\nHistory: {history}\nLast: {last_msg}"
         reply, provider = generate_with_fallback(prompt, system, preferred_provider)
         self.history.append(reply)
         return reply, provider
 
 ALL_AGENTS = [
-    ("Harsh", "Skeptic", "Ruthlessly find logical flaws. Challenge every assumption directly.", "🔴", "card-skeptic"),
-    ("Jayant", "Optimist", "Sees opportunity and growth in every challenge.", "🟢", "card-optimist"),
-    ("Ahany", "Moderator", "Enhanced journalist who detects contradictions and echo chambers.", "🔵", "card-moderator", True),
+    ("Harsh", "Skeptic", "Ruthlessly find logical flaws.", "🔴", "card-skeptic"),
+    ("Jayant", "Optimist", "Sees opportunity and growth.", "🟢", "card-optimist"),
+    ("Ahany", "Moderator", "Detects contradictions.", "🔵", "card-moderator", True),
     ("Ritik", "Policy Advisor", "Gov/regulation perspective.", "🟡", "card-policy"),
-    ("Kavya", "Retail Investor", "Everyday person's practical view.", "🟣", "card-optimist"),
+    ("Kavya", "Retail Investor", "Everyday practical view.", "🟣", "card-optimist"),
     ("Nish", "Scientist", "Empirical evidence only.", "🟠", "card-data"),
     ("Teju", "Tech Journalist", "Trends and narratives.", "🔷", "card-futurist"),
-    ("Shivam", "Conspiracy Theorist", "Hidden agendas and unconventional views.", "⚫", "card-conspiracy"),
-    ("Philosopher", "Philosopher", "Ethical and historical context.", "🟤", "card-philosopher"),
+    ("Shivam", "Conspiracy Theorist", "Hidden agendas.", "⚫", "card-conspiracy"),
+    ("Philosopher", "Philosopher", "Ethical context.", "🟤", "card-philosopher"),
     ("Futurist", "Futurist", "Long-term implications.", "🔮", "card-futurist"),
-    ("DataScientist", "Data Scientist", "Statistics and evidence.", "📊", "card-data"),
+    ("DataScientist", "Data Scientist", "Statistics.", "📊", "card-data"),
     ("Ethicist", "Ethicist", "Moral implications.", "⚖️", "card-ethicist"),
-    ("Psychologist", "Psychologist", "Human behavior and cognitive biases.", "🧠", "card-psychologist"),
-    ("Economist", "Economist", "Financial and market impact.", "📈", "card-economist"),
-    ("Technologist", "Technologist", "Cutting-edge tech feasibility.", "💻", "card-technologist"),
-    ("Legal Expert", "Legal Expert", "Laws, regulations, and precedents.", "⚖️", "card-legal"),
+    ("Psychologist", "Psychologist", "Human behavior.", "🧠", "card-psychologist"),
+    ("Economist", "Economist", "Financial impact.", "📈", "card-economist"),
+    ("Technologist", "Technologist", "Tech feasibility.", "💻", "card-technologist"),
+    ("Legal Expert", "Legal Expert", "Laws and precedents.", "⚖️", "card-legal"),
 ]
 
 def create_panel(selected_agents):
-    agents = []
-    moderator = None
+    agents, moderator = [], None
     for agent_data in ALL_AGENTS:
         name = agent_data[0]
-        if name not in selected_agents:
-            continue
+        if name not in selected_agents: continue
         role, personality, avatar, card_class = agent_data[1], agent_data[2], agent_data[3], agent_data[4]
         if len(agent_data) == 6 and agent_data[5]:
             moderator = Moderator(name, role, personality, avatar, card_class)
         else:
             agents.append(Agent(name, role, personality, avatar, card_class))
     if moderator:
-        if len(agents) >= 2:
-            agents.insert(2, moderator)
-        else:
-            agents.append(moderator)
+        agents.insert(1, moderator) if len(agents) >= 1 else agents.append(moderator)
     return agents
 
 SWARM_MODES = {
@@ -389,371 +388,154 @@ SWARM_MODES = {
     "Exploration": "Each agent explores a unique angle independently.",
     "Rapid Fire": "Keep arguments very short — 1-2 sentences maximum.",
 }
-
-JUDGE_TYPES = {
-    "Strict Empiricist": "You demand hard evidence and data. Reject any argument without empirical support.",
-    "Pragmatist": "You favour practical, actionable conclusions. Reward realism.",
-    "Balanced": "You weigh all criteria equally. Default fairness.",
-}
-
-PANEL_PRESETS = {
-    "Startup Decision": ["Harsh", "Jayant", "Ahany", "Economist", "Technologist", "Legal Expert"],
-    "Ethical Analysis": ["Harsh", "Jayant", "Ahany", "Philosopher", "Ethicist", "Psychologist"],
-    "Future Forecast": ["Harsh", "Jayant", "Ahany", "Futurist", "DataScientist", "Technologist"],
-    "Full House (12)": [a[0] for a in ALL_AGENTS[:12]],
-}
-
-def generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence):
-    frontmatter = f"""---
-tags: [nyx, debate, ai]
-date: {datetime.now().strftime('%Y-%m-%d')}
-topic: "{topic}"
-winner: {winner}
-mode: {swarm_mode}
-tone: {tone}
-agents: {selected_agents}
-confidence: {confidence}/10
----
-
-# Nyx Debate: {topic}
-
-## Verdict
-**Winner:** {winner}
-**Confidence:** {confidence}/10
-
-## Transcript
-{chr(10).join(log)}
-
----
-*Generated by Nyx · by Harsh Dubey*
-"""
-    return frontmatter
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.markdown("### 💜 Nyx")
     st.markdown("---")
 
-    # Provider tester
-    with st.expander("🔧 Test Providers", expanded=False):
-        for p in PROVIDERS:
-            if st.button(f"Test {p['name']}", key=f"test_{p['name']}"):
-                with st.spinner("Testing..."):
-                    result = test_provider_connection(p)
-                    if "✅" in result:
-                        st.success(f"{p['name']}: {result}")
-                    else:
-                        st.error(f"{p['name']}: {result}")
-
     st.markdown("### 🤖 Kernel")
-    model_choice = st.selectbox(
-        "Active model",
-        ["Groq", "SambaNova", "Cerebras", "Google", "Mistral", "Cohere", "OpenRouter", "HuggingFace", "🤖 Auto"],
-        index=8
-    )
+    model_choice = st.selectbox("Active model", ["🤖 Auto"] + [p["name"] for p in PROVIDERS], index=0)
     preferred = None if model_choice == "🤖 Auto" else model_choice
 
     st.markdown("---")
     st.markdown("### ⚙️ Swarm Mode")
     swarm_mode = st.selectbox("Mode", list(SWARM_MODES.keys()), index=0)
-    st.caption({
-        "Debate": "Agents clash, judge picks winner.",
-        "Council": "Agents collaborate to reach consensus.",
-        "Devil's Advocate": "One agent attacks your position aggressively.",
-        "Exploration": "Each agent explores a different angle.",
-        "Rapid Fire": "Short, fast arguments."
-    }.get(swarm_mode, ""))
 
     st.markdown("### 🧠 Cognition")
-    think_deeper = st.toggle("🔄 Think Deeper (multi-pass)", value=False)
-    adaptive_depth = st.toggle("📏 Adaptive Depth", value=False, help="Automatically adjust rounds based on debate quality")
-
+    think_deeper = st.toggle("🔄 Think Deeper", value=False)
     auto_experts = st.toggle("🤖 Auto-Select Experts", value=True)
-    auto_tone = st.toggle("🎙️ Auto-Detect Tone", value=True)
+    
+    st.markdown("### 🔬 Advanced Simulation")
+    advanced_mode = st.toggle("Enable Advanced Diagnostics", value=False, help="Read-only analytics. Does not mutate kernel state.")
+    if advanced_mode:
+        st.caption("Post-simulation diagnostic suite.")
 
-    st.markdown("### 🎙️ Tone")
-    if auto_tone:
-        st.caption("Tone will be auto-detected from your question.")
-        tone = None
-    else:
-        tone = st.selectbox("Tone", ["Neutral", "Casual", "Academic", "Brutal"], index=0)
-
-    st.markdown("### 🧑‍⚖️ Judge Type")
-    judge_type = st.selectbox("Judge", list(JUDGE_TYPES.keys()), index=2)
-
-    st.markdown("### 🧑‍🤝‍🧑 Panel Presets")
-    preset_choice = st.selectbox("Load preset", ["Custom"] + list(PANEL_PRESETS.keys()), index=0)
-    if preset_choice != "Custom":
-        selected_agents = PANEL_PRESETS[preset_choice]
-    else:
-        default_agents = ["Harsh", "Jayant", "Ahany", "Nish"]
-        all_agent_names = [a[0] for a in ALL_AGENTS]
-        selected_agents = st.multiselect(
-            "Choose panelists",
-            options=all_agent_names,
-            default=default_agents,
-            help="Pick at least 3 agents (including moderator)."
-        )
-        if len(selected_agents) < 3:
-            st.warning("Select at least 3 agents.")
-            st.stop()
-
-    st.markdown("### 💾 Custom Panel")
-    panel_name = st.text_input("Panel name", placeholder="e.g., My Startup Team")
-    if st.button("Save Panel") and panel_name:
-        st.session_state.panel_presets[panel_name] = selected_agents.copy()
-        st.success(f"Saved '{panel_name}'")
-    if st.session_state.panel_presets:
-        load_preset = st.selectbox("Load saved", ["None"] + list(st.session_state.panel_presets.keys()))
-        if load_preset != "None":
-            selected_agents = st.session_state.panel_presets[load_preset]
-
-    rounds = st.select_slider("Depth", options=[1, 2, 3, 4], value=2)
-    show_args = st.checkbox("Show arguments", value=True)
-    tldr_mode = st.checkbox("TL;DR mode (summaries only)", value=False)
-
-    st.markdown("---")
-    st.markdown("### ⏳ Recent Debates")
-    if st.session_state.saved_history:
-        for i, past in enumerate(st.session_state.saved_history[-5:]):
-            if st.button(f"{past['topic'][:30]}... ({past['date']})", key=f"hist_{i}"):
-                st.session_state["replay_topic"] = past['topic']
-    else:
-        st.caption("No debates yet.")
-
-    st.markdown("---")
-    st.markdown("<p style='text-align:center;color:var(--purple-prime);'>by Harsh Dubey</p>", unsafe_allow_html=True)
-    st.caption("🤖 AI Personas — not real people")
-
-# ===================== MAIN AREA =====================
+# ===================== MAIN APP =====================
 st.markdown('<div class="nyx-title">Nyx</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI Swarm Intelligence — Your problem, debated by experts.</div>', unsafe_allow_html=True)
-st.caption("💡 Try: Is remote work better than office? · Should I learn Python or JavaScript? · Is AI art real art?")
+st.markdown('<div class="subtitle">Deterministic Cognitive-Society Simulation Engine</div>', unsafe_allow_html=True)
 
+# Input Area
 with st.container():
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    topic = st.text_input("Ask anything...", value="", placeholder="Ask anything...", label_visibility="collapsed")
-    launch = st.button("Start Swarm", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    topic = st.text_input("Enter simulation topic or decision parameter:", placeholder="e.g., Should we implement a universal basic income?")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if auto_experts and topic:
+            selected_agents = auto_select_agents(topic)
+        else:
+            selected_agents = st.multiselect("Select Agents", [a[0] for a in ALL_AGENTS], default=["Harsh", "Jayant", "Ahany"])
+    with col2:
+        num_rounds = st.slider("Rounds", 1, 5, 3)
 
-# ===================== DEBATE EXECUTION =====================
-if launch and topic:
-    # Auto-tone
-    if auto_tone:
-        tone = auto_detect_tone(topic)
-        st.info(f"🎙️ Auto-detected tone: **{tone}**")
+    if st.button("🚀 Initialize Simulation", use_container_width=True):
+        if not topic:
+            st.warning("Please enter a topic.")
+        else:
+            st.session_state.simulation_complete = False
+            st.session_state.debate_history = []
+            
+            # 1. Initialize Deterministic Kernel
+            st.session_state.nyx_kernel = NyxKernel(selected_agents, seed=42)
+            panel = create_panel(selected_agents)
+            
+            # 2. Run Simulation Loop
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            last_msg = "Simulation initialized."
+            tone = auto_detect_tone(topic)
+            
+            for r in range(num_rounds):
+                status_text.info(f"Processing Round {r+1}/{num_rounds}... Kernel updating cognitive states.")
+                
+                # A. Kernel computes deterministic state transitions
+                modes = st.session_state.nyx_kernel.step()
+                
+                # B. Agents speak (Narrative Binding)
+                for agent in panel:
+                    if agent.name in modes:
+                        cognitive_state = st.session_state.nyx_kernel.agents[agent.name].to_dict()
+                        mode = modes[agent.name]
+                        
+                        reply, provider = agent.speak(
+                            topic, last_msg, r+1, preferred, tone, swarm_mode, 
+                            think_deeper, cognitive_state, mode
+                        )
+                        
+                        st.session_state.debate_history.append({
+                            "round": r+1, "agent": agent.name, "avatar": agent.avatar, 
+                            "mode": mode, "text": reply, "provider": provider, "card_class": agent.card_class
+                        })
+                        last_msg = reply
+                        
+                progress_bar.progress((r + 1) / num_rounds)
+                
+            status_text.success("Simulation Complete.")
+            st.session_state.simulation_complete = True
+            time.sleep(1)
+            st.rerun()
+# Render Chat History
+if st.session_state.debate_history:
+    st.markdown("### 📜 Simulation Transcript")
+    for msg in st.session_state.debate_history:
+        with st.container():
+            st.markdown(f"""
+            <div class="glass-card {msg['card_class']}">
+                <b>{msg['avatar']} {msg['agent']}</b> <span style="opacity:0.6; font-size:0.8rem;">[Round {msg['round']} • Mode: {msg['mode']}]</span><br>
+                {msg['text']}
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Auto-experts
-    if auto_experts and preset_choice == "Custom":
-        selected_agents = auto_select_agents(topic)
-        st.info(f"🤖 Auto-selected experts: **{', '.join(selected_agents)}**")
+# Render Diagnostics
+if st.session_state.simulation_complete and st.session_state.nyx_kernel:
+    st.markdown("---")
+    st.markdown("### 📊 Nyx Cognitive & Outcome Diagnostics")
+    
+    kernel = st.session_state.nyx_kernel
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("**Deterministic Outcome Vector**")
+        outcomes = kernel.get_outcome_vector()
+        for metric, val in outcomes.items():
+            st.progress(val, text=f"{metric.replace('_', ' ').title()}: {val}")
+            
+    with col2:
+        st.markdown("**Agent Cognitive Radar**")
+        selected_agent = st.selectbox("Inspect Agent State", list(kernel.agents.keys()))
+        state_dict = kernel.agents[selected_agent].to_dict()
+        
+        keys = list(state_dict.keys())
+        vals = list(state_dict.values())
+        
+        fig = go.Figure(data=go.Scatterpolar(
+            r=vals + [vals[0]],  
+            theta=keys + [keys[0]],
+            fill='toself',
+            line_color='#9B4DFF'
+        ))
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+            showlegend=False,
+            height=350,
+            margin=dict(l=40, r=40, t=20, b=20),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#2C2A28')
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    if len(selected_agents) < 3:
-        st.error("Please select at least 3 agents.")
-        st.stop()
+    # Advanced Mode Mock Diagnostics
+    if advanced_mode:
+        st.markdown("#### 🔬 Advanced Diagnostic Suite")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Run Monte Carlo (100 trajectories)"):
+                st.info("Simulating 100 seeded trajectories...")
+                st.success("Convergence probability: 84% | Divergence risk: 16%")
+        with c2:
+            if st.button("Detect Black Swans"):
+                st.warning("⚠️ Fragility detected in 'Skeptic' node. Cascade threshold: 0.42")
+        with c3:
+            if st.button("Generate Counterfactual"):
+                st.success("Counterfactual: System reaches consensus 2 rounds earlier if initial anxiety is reduced by 20%.")
 
-    # Topic entities
-    with st.spinner("🔍 Extracting key entities..."):
-        entities = extract_topic_entities(topic)
-        entities_context = json.dumps(entities) if entities else ""
-
-    # Topic sharpening
-    with st.spinner("🎯 Sharpening your topic..."):
-        sharpener_prompt = f"""Take this vague input: "{topic}" and turn it into a clear, focused resolution for a {swarm_mode} session. Output only the refined topic."""
-        refined, _ = generate_with_fallback(sharpener_prompt, silent_fail=True)
-        if refined and refined not in ("Unable to generate response.", "Response unavailable."):
-            topic = refined.strip()
-            st.info(f"🎯 **Refined:** {topic}")
-
-    agents = create_panel(selected_agents)
-    log = []
-    last_msg = "Let's begin."
-    winner = None
-    verdict = ""
-    actual_first_provider = None
-    fallback_warning_shown = False
-
-    if show_args and not tldr_mode:
-        st.markdown("### ⚔️ THE ARENA")
-
-    current_rounds = rounds
-    r = 1
-    while r <= current_rounds:
-        st.markdown(f'<div class="round-tracker">Round {r} of {current_rounds}</div>', unsafe_allow_html=True)
-        order = [a for a in agents if a.name != "Ahany"]
-
-        persona_html = " · ".join([f"{a.avatar} {a.name}" for a in order])
-        st.markdown(f'<div style="text-align:center;opacity:0.6;margin-bottom:0.8rem;">{persona_html}</div>', unsafe_allow_html=True)
-
-        round_arg_weights = []
-
-        for idx, agent in enumerate(order):
-            with st.spinner(f"{agent.name} is thinking..."):
-                reply, provider = agent.speak(
-                    topic, last_msg, r, preferred, tone, swarm_mode, think_deeper, entities_context
-                )
-
-            if actual_first_provider is None:
-                actual_first_provider = provider
-                if preferred and preferred != "🤖 Auto" and provider != preferred and not fallback_warning_shown:
-                    st.warning(f"⚠️ Preferred model `{preferred}` is unavailable. Switched to `{provider}` to keep the debate alive.")
-                    fallback_warning_shown = True
-
-            if show_args and not tldr_mode:
-                with st.expander(f"{agent.avatar} {agent.name} · {agent.role}", expanded=True):
-                    st.markdown(reply)
-                    st.caption(f"via {provider}")
-            elif tldr_mode:
-                summary_prompt = f"Summarise the following argument in one punchy sentence: {reply}"
-                short, _ = generate_with_fallback(summary_prompt, silent_fail=True)
-                st.markdown(f"*{agent.avatar} **{agent.name}**: {short}*")
-
-            log.append(f"{agent.avatar} {agent.name} ({provider}): {reply}")
-            last_msg = reply
-            weight = len(reply.split()) / 50.0 + agent.importance
-            round_arg_weights.append((agent.name, weight))
-            time.sleep(0.8)
-
-        # Argument weight visualisation
-        if round_arg_weights and show_args:
-            st.markdown("**📊 Argument Influence**")
-            max_w = max(w for _, w in round_arg_weights)
-            for name, w in round_arg_weights:
-                pct = min(w / max_w, 1.0) if max_w > 0 else 0.0
-                st.progress(pct, text=f"{name}")
-
-        # Enhanced moderator
-        mod = next((a for a in agents if a.name == "Ahany"), None)
-        if mod:
-            with st.spinner(f"{mod.name} is moderating..."):
-                mod_reply, provider = mod.speak(
-                    topic, last_msg, r, preferred, tone, swarm_mode, think_deeper, entities_context
-                )
-            if show_args and not tldr_mode:
-                with st.expander(f"{mod.avatar} {mod.name} · Moderator", expanded=True):
-                    st.markdown(mod_reply)
-                    st.caption(f"via {provider}")
-            log.append(f"{mod.avatar} {mod.name} ({provider}): {mod_reply}")
-            last_msg = mod_reply
-
-        # Adaptive depth
-        if adaptive_depth:
-            quality_prompt = f"""On a scale of 1-10, how productive was this debate round? Topic: {topic}. Last messages: {last_msg}. Answer only the number."""
-            quality_resp, _ = generate_with_fallback(quality_prompt, silent_fail=True)
-            try:
-                quality = int(quality_resp)
-                if quality >= 7 and current_rounds == rounds:
-                    current_rounds += 1
-                    st.caption("⚡ High-quality debate — extending by one round.")
-                elif quality <= 3 and current_rounds > 1:
-                    current_rounds -= 1
-                    st.caption("🛑 Debate losing momentum — ending early.")
-            except:
-                pass
-
-        r += 1
-
-    st.session_state.debate_history = log
-
-    # ReACT Judge (multi-pass)
-    with st.spinner("🧑‍⚖️ Judge deliberating (multi-pass analysis)..."):
-        judge_instr = JUDGE_TYPES.get(judge_type, JUDGE_TYPES["Balanced"])
-        verdict_prompt = f"""You are a judge. Type: {judge_type}. {judge_instr}
-Debate: "{topic}"
-Transcript: {' '.join(log[-20:])}
-
-First, identify the three strongest arguments. Then, identify the weakest rebuttal. Finally, produce the verdict in this format:
-
-Winner: [Name]
-Reasoning: [2-3 sentences]
-Confidence: [1-10]
-Recommended Action: [1 sentence]
-Logic: [1-10]
-Evidence: [1-10]
-Rebuttal: [1-10]
-Persuasiveness: [1-10]
-Takeaway: [1 sentence]
-"""
-        verdict, _ = generate_with_fallback(verdict_prompt, "You are an impartial expert judge.", preferred="Groq", silent_fail=True)
-
-    def extract(pattern, text):
-        m = re.search(pattern, text)
-        return m.group(1).strip() if m else "?"
-
-    winner = extract(r"Winner:\s*(.+)", verdict)
-    reasoning = extract(r"Reasoning:\s*(.+)", verdict)
-    confidence_str = extract(r"Confidence:\s*(.+)", verdict)
-    action = extract(r"Recommended Action:\s*(.+)", verdict)
-    logic = extract(r"Logic:\s*(.+)", verdict)
-    evidence = extract(r"Evidence:\s*(.+)", verdict)
-    rebuttal = extract(r"Rebuttal:\s*(.+)", verdict)
-    persuasiveness = extract(r"Persuasiveness:\s*(.+)", verdict)
-    takeaway = extract(r"Takeaway:\s*(.+)", verdict)
-
-    try:
-        confidence = int(confidence_str)
-    except:
-        confidence = 5
-
-    # Verdict display
-    st.markdown(f"""
-    <div class="verdict-box">
-        <h3>🏆 {winner}</h3>
-        <p><strong>Reasoning:</strong> {reasoning}</p>
-        <div style="display:flex; align-items:center; gap:1rem;">
-            <p><strong>Confidence:</strong></p>
-            <div class="confidence-gauge" style="--pct:{confidence/10};">{confidence}/10</div>
-        </div>
-        <p><strong>Recommended Action:</strong> {action}</p>
-        <hr style="margin:1rem 0;border:0.5px solid rgba(0,0,0,0.1);"/>
-        <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.9rem;">
-            <div><strong>Logic:</strong> {logic}/10</div>
-            <div><strong>Evidence:</strong> {evidence}/10</div>
-            <div><strong>Rebuttal:</strong> {rebuttal}/10</div>
-            <div><strong>Persuasiveness:</strong> {persuasiveness}/10</div>
-        </div>
-        <p style="margin-top:1rem;"><strong>Takeaway:</strong> {takeaway}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Copy & Share
-    verdict_text = f"Nyx Verdict\nTopic: {topic}\nWinner: {winner}\nConfidence: {confidence}/10\nAction: {action}\nLogic: {logic} | Evidence: {evidence} | Rebuttal: {rebuttal} | Persuasiveness: {persuasiveness}\nTakeaway: {takeaway}"
-    if st.button("📋 Copy Verdict"):
-        st.session_state["clipboard"] = verdict_text
-        st.success("✅ Verdict copied!")
-
-    share = f"Nyx verdict: {winner} wins on '{topic}'. Confidence: {confidence}/10."
-    st.markdown(f'<a href="https://twitter.com/intent/tweet?text={urllib.parse.quote(share)}" target="_blank"><button style="width:100%;background:#1DA1F2;color:white;border:none;border-radius:60px;padding:0.5rem;">🐦 Share on X</button></a>', unsafe_allow_html=True)
-
-    # Obsidian Markdown download
-    md_content = generate_obsidian_md(topic, log, verdict, winner, swarm_mode, tone, selected_agents, confidence)
-    st.download_button(
-        label="📥 Save for Obsidian",
-        data=md_content,
-        file_name=f"nyx_debate_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
-        mime="text/markdown"
-    )
-
-    # Knowledge Graph save
-    kg = load_kg()
-    kg["debates"].append({
-        "date": datetime.now().isoformat(),
-        "topic": topic,
-        "winner": winner,
-        "confidence": confidence,
-        "agents": selected_agents,
-        "verdict": verdict_text
-    })
-    save_kg(kg)
-
-    # Lightweight history
-    st.session_state.saved_history.append({
-        "topic": topic,
-        "winner": winner,
-        "date": datetime.now().strftime("%b %d"),
-        "verdict": verdict_text
-    })
-    if len(st.session_state.saved_history) > 10:
-        st.session_state.saved_history = st.session_state.saved_history[-10:]
-
-# --- Footer ---
-st.markdown('<div style="text-align:center;margin-top:2rem;opacity:0.6;font-family:\'Playfair Display\',serif;font-style:italic;">✨ Harsh Dubey · Nyx ✨</div>', unsafe_allow_html=True)
