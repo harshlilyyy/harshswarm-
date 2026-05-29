@@ -361,7 +361,7 @@ def run_standard_debate(topic, agents_text, rounds, preferred_provider=None, see
         stance = parts[1].strip() if len(parts) > 1 else "neutral"
         agents.append(DebateAgent(name, stance))
     if len(agents) < 2:
-        return ["Need at least 2 agents"], "None"
+        return ["Need at least 2 agents"], "None", seed
     log = []
     last_msg = topic
     for r in range(1, rounds+1):
@@ -370,6 +370,43 @@ def run_standard_debate(topic, agents_text, rounds, preferred_provider=None, see
             log.append(f"**Round {r} – {agent.name}** (via {provider}): {msg}")
             last_msg = msg
     # Simple winner heuristic: longest average argument length
+    winner = max(agents, key=lambda a: sum(len(m) for m in a.history)/max(1,len(a.history))).name
+    return log, winner, seed
+
+# ---------- CUSTOM PROMPT DEBATE AGENT ----------
+class CustomDebateAgent:
+    def __init__(self, name, role, prompt):
+        self.name = name
+        self.role = role
+        self.prompt = prompt
+        self.history = []
+    
+    def speak(self, topic, last_msg, round_num, system_prompt, max_words, preferred_provider):
+        prompt = f"""Debate round {round_num} on: "{topic}".
+You are {self.name}, the {self.role}. Last message: "{last_msg}".
+Your character instructions: {self.prompt}
+Keep your response under {max_words} words."""
+        reply, provider = generate_with_fallback(prompt, system_prompt, preferred_provider)
+        # Truncate to max words if needed
+        words = reply.split()
+        if len(words) > max_words:
+            reply = ' '.join(words[:max_words]) + "..."
+        self.history.append(reply)
+        return reply, provider
+
+def run_custom_debate(topic, agents_config, system_prompt, rounds, max_words, seed=42, preferred_provider=None):
+    rng = random.Random(seed)
+    agents = [CustomDebate(agent["name"], agent["role"], agent["prompt"]) for agent in agents_config]
+    if len(agents) < 2:
+        return ["Need at least 2 agents"], "None", seed
+    log = []
+    last_msg = topic
+    for r in range(1, rounds+1):
+        for agent in agents:
+            msg, provider = agent.speak(topic, last_msg, r, system_prompt, max_words, preferred_provider)
+            log.append(f"**Round {r} – {agent.name} ({agent.role})** (via {provider}): {msg}")
+            last_msg = msg
+    # Winner based on engagement and argument quality (length as proxy)
     winner = max(agents, key=lambda a: sum(len(m) for m in a.history)/max(1,len(a.history))).name
     return log, winner, seed
 
@@ -662,15 +699,130 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    mode = st.radio("Choose mode", ["Standard Debate", "Advanced Simulation"], index=0, label_visibility="collapsed")
-    st.session_state.adv_sim = (mode == "Advanced Simulation")
-
-    if st.session_state.adv_sim:
+    # Create tabs for different modes
+    tabs = st.tabs(["🗣️ Standard Debate", "💬 Custom Prompt Debate", "🌌 Advanced Simulation"])
+    
+    # Tab 1: Standard Debate
+    with tabs[0]:
+        st.markdown("### 🗣️ Standard Debate")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            topic = st.text_input("Topic", "Should smartphones be banned in schools?", key="std_topic")
+            agents_input = st.text_area("Agents (one per line, format: Name, stance)", 
+                                        "Harsh, skeptic\nJayant, optimist\nAhany, moderator", key="std_agents")
+        with col2:
+            rounds_debate = st.slider("Rounds", 1, 6, 3, key="std_rounds")
+            seed_debate = st.number_input("Seed", value=42, step=1, key="debate_seed_std")
+        available_providers = get_providers()
+        provider_names = ["Auto"] + [p["name"] for p in available_providers]
+        preferred = st.selectbox("Preferred provider", provider_names, index=0, key="std_provider")
+        preferred = None if preferred == "Auto" else preferred
+        if st.button("⚡ Start Debate", key="std_debate_btn"):
+            with st.spinner("Debating with AI..."):
+                log, winner, used_seed = run_standard_debate(topic, agents_input, rounds_debate, preferred, seed=seed_debate)
+                st.session_state.debate_log = log
+                st.session_state.debate_winner = winner
+                st.session_state.debate_seed = used_seed
+                st.session_state.debate_mode = "standard"
+                st.success("Debate finished!")
+    
+    # Tab 2: Custom Prompt Debate
+    with tabs[1]:
+        st.markdown("### 💬 Custom Prompt Debate")
+        st.markdown("*Design your own debate scenario with custom prompts for each agent*")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            custom_topic = st.text_input("Debate Topic", "What is the future of AI in education?", key="custom_topic")
+            custom_system_prompt = st.text_area(
+                "System Instructions",
+                "You are participating in a structured debate. Present clear, logical arguments. "
+                "Reference evidence when possible. Be respectful but persuasive.",
+                height=100,
+                key="custom_system"
+            )
+        
+        with col2:
+            custom_rounds = st.slider("Rounds", 1, 8, 4, key="custom_rounds")
+            custom_seed = st.number_input("Seed", value=42, step=1, key="custom_seed")
+            max_words = st.slider("Max words per argument", 50, 300, 150, key="custom_words")
+        
+        st.markdown("#### Agent Configuration")
+        agents_container = st.container()
+        with agents_container:
+            # Default custom agents
+            if "custom_agents_config" not in st.session_state:
+                st.session_state.custom_agents_config = [
+                    {"name": "Alex", "role": "Tech Optimist", "prompt": "You believe AI will revolutionize education positively. Focus on personalization, accessibility, and efficiency."},
+                    {"name": "Jordan", "role": "Critical Thinker", "prompt": "You are concerned about AI's risks in education. Focus on privacy, equity, and human connection."},
+                    {"name": "Sam", "role": "Balanced Moderator", "prompt": "You seek middle ground. Acknowledge both benefits and risks. Propose hybrid solutions."}
+                ]
+            
+            # Display editable agent configs
+            edited_agents = []
+            for i, agent in enumerate(st.session_state.custom_agents_config):
+                with st.expander(f"👤 {agent['name']} - {agent['role']}", expanded=(i==0)):
+                    col_a, col_b = st.columns([1, 3])
+                    with col_a:
+                        new_name = st.text_input("Name", agent["name"], key=f"agent_name_{i}")
+                        new_role = st.text_input("Role", agent["role"], key=f"agent_role_{i}")
+                    with col_b:
+                        new_prompt = st.text_area(
+                            "Custom Prompt",
+                            agent["prompt"],
+                            height=80,
+                            key=f"agent_prompt_{i}"
+                        )
+                    edited_agents.append({
+                        "name": new_name,
+                        "role": new_role,
+                        "prompt": new_prompt
+                    })
+            
+            # Add/Remove agents
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("➕ Add Agent", key="add_agent"):
+                    st.session_state.custom_agents_config.append({
+                        "name": f"Agent{len(st.session_state.custom_agents_config)+1}",
+                        "role": "Participant",
+                        "prompt": "You are a thoughtful participant in this debate."
+                    })
+                    st.rerun()
+            with col_btn2:
+                if len(st.session_state.custom_agents_config) > 2 and st.button("➖ Remove Last Agent", key="remove_agent"):
+                    st.session_state.custom_agents_config.pop()
+                    st.rerun()
+            
+            # Update session state with edited values
+            st.session_state.custom_agents_config = edited_agents
+        
+        if st.button("🎭 Run Custom Debate", type="primary", key="custom_debate_btn"):
+            if len(st.session_state.custom_agents_config) < 2:
+                st.error("Need at least 2 agents for a debate.")
+            else:
+                with st.spinner("Running custom debate scenario..."):
+                    log, winner, used_seed = run_custom_debate(
+                        custom_topic,
+                        st.session_state.custom_agents_config,
+                        custom_system_prompt,
+                        custom_rounds,
+                        max_words,
+                        custom_seed
+                    )
+                    st.session_state.debate_log = log
+                    st.session_state.debate_winner = winner
+                    st.session_state.debate_seed = used_seed
+                    st.session_state.debate_mode = "custom"
+                    st.success("Custom debate complete!")
+    
+    # Tab 3: Advanced Simulation
+    with tabs[2]:
         st.markdown("### 🌌 Advanced Simulation")
-        seed = st.number_input("Seed", value=42, step=1)
-        rounds = st.slider("Rounds", 2, 10, 4)
-        agent_names = st.text_area("Agents (one per line)", "Harsh\nJayant\nMira\nVera\nAtlas")
-        if st.button("🚀 Run Simulation", type="primary"):
+        seed = st.number_input("Seed", value=42, step=1, key="adv_seed")
+        rounds = st.slider("Rounds", 2, 10, 4, key="adv_rounds")
+        agent_names = st.text_area("Agents (one per line)", "Harsh\nJayant\nMira\nVera\nAtlas", key="adv_agents")
+        if st.button("🚀 Run Simulation", type="primary", key="adv_sim_btn"):
             agent_list = [name.strip() for name in agent_names.splitlines() if name.strip()]
             if len(agent_list) < 2:
                 st.error("Need at least 2 agents.")
@@ -679,53 +831,35 @@ with st.sidebar:
                     result = run_simulation(agent_list, rounds=rounds, seed=seed)
                     st.session_state.sim_result = result
                     st.success("Simulation complete!")
-    else:
-        st.markdown("### 🗣️ Standard Debate")
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            topic = st.text_input("Topic", "Should smartphones be banned in schools?")
-            agents_input = st.text_area("Agents (one per line, format: Name, stance)", 
-                                        "Harsh, skeptic\nJayant, optimist\nAhany, moderator")
-        with col2:
-            rounds_debate = st.slider("Rounds", 1, 6, 3)
-            seed_debate = st.number_input("Seed", value=42, step=1, key="debate_seed")
-        available_providers = get_providers()
-        provider_names = ["Auto"] + [p["name"] for p in available_providers]
-        preferred = st.selectbox("Preferred provider", provider_names, index=0)
-        preferred = None if preferred == "Auto" else preferred
-        if st.button("⚡ Start Debate"):
-            with st.spinner("Debating with AI..."):
-                log, winner, used_seed = run_standard_debate(topic, agents_input, rounds_debate, preferred, seed=seed_debate)
-                st.session_state.debate_log = log
-                st.session_state.debate_winner = winner
-                st.session_state.debate_seed = used_seed
-                st.success("Debate finished!")
 
 # ---------- MAIN PAGE ----------
 st.markdown('<p class="nyx-title">Nyx</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle" style="text-align:center; opacity:0.7;">Cognitive‑Social Physics Engine · by Harsh Dubey</p>',
             unsafe_allow_html=True)
 
-if st.session_state.adv_sim:
-    if st.session_state.sim_result:
-        show_outcomes(st.session_state.sim_result)
+# Display results based on which tab was used
+if st.session_state.get("debate_log"):
+    st.markdown("## Debate Transcript")
+    # Display seed info
+    if hasattr(st.session_state, 'debate_seed'):
+        st.info(f"🎲 Seed used: {st.session_state.debate_seed}")
+    
+    # Show mode indicator
+    mode_label = st.session_state.get("debate_mode", "standard")
+    if mode_label == "custom":
+        st.markdown("### 💬 Custom Prompt Debate Results")
     else:
-        st.markdown('<div class="glass-card"><h3>Advanced Simulation Ready</h3>'
-                     '<p>Select agents, set a seed, and click <strong>Run Simulation</strong>.</p></div>',
-                     unsafe_allow_html=True)
+        st.markdown("### 🗣️ Standard Debate Results")
+    
+    for line in st.session_state.debate_log:
+        st.markdown(line)
+    if st.session_state.debate_winner:
+        st.success(f"**Winner:** {st.session_state.debate_winner}")
+elif st.session_state.sim_result:
+    show_outcomes(st.session_state.sim_result)
 else:
-    if st.session_state.debate_log:
-        st.markdown("## Debate Transcript")
-        # Display seed info
-        if hasattr(st.session_state, 'debate_seed'):
-            st.info(f"🎲 Seed used: {st.session_state.debate_seed}")
-        for line in st.session_state.debate_log:
-            st.markdown(line)
-        if st.session_state.debate_winner:
-            st.success(f"**Winner:** {st.session_state.debate_winner}")
-    else:
-        st.markdown('<div class="glass-card"><h3>Standard Debate Mode</h3>'
-                     '<p>Enter a topic and click <strong>Start Debate</strong>.</p></div>',
-                     unsafe_allow_html=True)
+    st.markdown('<div class="glass-card"><h3>Welcome to Nyx</h3>'
+                 '<p>Select a mode above and start exploring cognitive-social dynamics!</p></div>',
+                 unsafe_allow_html=True)
 
 st.markdown("<div style='text-align:center; opacity:0.5;'>✨ Harsh Dubey · Nyx ✨</div>", unsafe_allow_html=True)
