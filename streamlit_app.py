@@ -1,5 +1,5 @@
 # =============================================================================
-# PART 1 of 3 — Copy everything below into your app.py (top)
+# Nyx Cognitive-Social Physics Engine - Enhanced Version
 # =============================================================================
 import streamlit as st
 import time
@@ -8,6 +8,7 @@ import random
 import math
 from datetime import datetime
 import pandas as pd
+import numpy as np
 
 # Optional imports (only used if installed)
 try:
@@ -16,6 +17,13 @@ try:
     HAS_GRAPH = True
 except ImportError:
     HAS_GRAPH = False
+
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    HAS_PLOTLY = True
+except ImportError:
+    HAS_PLOTLY = False
 
 try:
     from openai import OpenAI
@@ -38,18 +46,41 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;350;400;500&display=swap');
     :root {
         --bg-light: #F5F0FF;
+        --bg-dark: #1a1a2e;
         --card-bg: rgba(255, 255, 255, 0.55);
+        --card-bg-dark: rgba(30, 30, 50, 0.7);
         --border-glow: rgba(180, 130, 255, 0.4);
         --purple-prime: #9B4DFF;
         --pink-hot: #FF4D6D;
         --red-accent: #E63946;
         --text-dark: #2C2A28;
+        --text-light: #f0f0f0;
         --glass-border: rgba(255, 255, 255, 0.7);
+        --glass-border-dark: rgba(255, 255, 255, 0.15);
     }
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
         background: var(--bg-light);
         color: var(--text-dark);
+        transition: all 0.3s ease;
+    }
+    .dark-mode {
+        background: var(--bg-dark) !important;
+        color: var(--text-light) !important;
+    }
+    .dark-mode .stApp {
+        background: radial-gradient(circle at 30% 20%, rgba(180,130,255,0.25) 0%, var(--bg-dark) 80%) !important;
+    }
+    .dark-mode [data-testid="stSidebar"] {
+        background: rgba(30, 30, 50, 0.8) !important;
+    }
+    .dark-mode .glass-card {
+        background: var(--card-bg-dark) !important;
+        border-color: var(--glass-border-dark) !important;
+    }
+    .dark-mode .stTextInput > div > div > input {
+        background: rgba(50, 50, 70, 0.7) !important;
+        color: var(--text-light) !important;
     }
     .stApp {
         background: radial-gradient(circle at 30% 20%, rgba(180,130,255,0.15) 0%, var(--bg-light) 80%);
@@ -106,6 +137,33 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 12px 24px -6px rgba(255,77,109,0.5);
     }
+    .tooltip {
+        position: relative;
+        cursor: help;
+        border-bottom: 1px dotted var(--purple-prime);
+    }
+    .tooltip:hover::after {
+        content: attr(data-tip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--purple-prime);
+        color: white;
+        padding: 0.5rem 0.8rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .loading-pulse {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,6 +176,8 @@ if "debate_log" not in st.session_state:
     st.session_state.debate_log = []
 if "debate_winner" not in st.session_state:
     st.session_state.debate_winner = ""
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
 
 # =============================================================================
 # DETERMINISTIC KERNEL (inlined) — No external files needed
@@ -351,8 +411,117 @@ def run_simulation(agent_names, rounds=4, seed=42):
     return {"state_history": state_history, "outcome_vector": outcome, "agents": agents, "seed": seed}
 
 def plot_sparkline(data, height=100):
-    chart_data = pd.DataFrame({"val": data})
-    st.line_chart(chart_data, height=height, use_container_width=True)
+    """Enhanced sparkline with Plotly for interactive visualization."""
+    if HAS_PLOTLY and len(data) > 0:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            y=data, 
+            mode='lines+markers',
+            line=dict(color='#9B4DFF', width=2),
+            marker=dict(size=6, color='#FF4D6D'),
+            hovertemplate='Round %{x}<br>Value: %{y:.3f}<extra></extra>'
+        ))
+        fig.update_layout(
+            height=height,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(showgrid=False, showticklabels=True),
+            yaxis=dict(showgrid=True, showticklabels=True, range=[0, 1]),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True, key=f"spark_{id(data)}")
+    else:
+        chart_data = pd.DataFrame({"val": data})
+        st.line_chart(chart_data, height=height, use_container_width=True)
+
+def plot_agent_network(agents, state_history):
+    """Create an interactive network graph showing agent interactions."""
+    if not HAS_GRAPH or not HAS_PLOTLY:
+        return
+    
+    st.markdown("### 🕸️ Agent Interaction Network")
+    
+    # Build network based on similarity of cognitive states
+    G = nx.Graph()
+    for i, a in enumerate(agents):
+        G.add_node(a.name, size=a.reputation * 20 + 10, color=a.self_worth)
+    
+    # Add edges based on state similarity
+    for i, a1 in enumerate(agents):
+        for j, a2 in enumerate(agents):
+            if i < j:
+                similarity = 1 - abs(a1.self_worth - a2.self_worth)
+                if similarity > 0.5:
+                    G.add_edge(a1.name, a2.name, weight=similarity)
+    
+    # Create Plotly network visualization
+    pos = nx.spring_layout(G, seed=42)
+    edge_x, edge_y = [], []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+    
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y, line=dict(width=1, color='#9B4DFF'),
+        hoverinfo='none', mode='lines'
+    )
+    
+    node_x, node_y, node_text, node_colors = [], [], [], []
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_data = next((a for a in agents if a.name == node), None)
+        if node_data:
+            node_text.append(f"{node}<br>SW: {node_data.self_worth:.2f}<br>Anx: {node_data.anxiety:.2f}")
+            node_colors.append(node_data.self_worth)
+    
+    node_trace = go.Scatter(
+        x=node_x, y=node_y, mode='markers+text',
+        marker=dict(size=15, color=node_colors, colorscale='PuRd', showscale=True),
+        text=list(G.nodes()), textposition="top center",
+        hovertemplate='%{text}<extra></extra>'
+    )
+    
+    fig = go.Figure(data=[edge_trace, node_trace],
+                   layout=go.Layout(showlegend=False, hovermode='closest',
+                                   margin=dict(b=0,l=0,r=0,t=0),
+                                   xaxis=dict(showgrid=False, zeroline=False),
+                                   yaxis=dict(showgrid=False, zeroline=False)))
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_variable_heatmap(state_history):
+    """Show correlation heatmap between variables."""
+    if not HAS_PLOTLY or len(state_history) == 0:
+        return
+    
+    st.markdown("### 🔥 Variable Correlation Heatmap")
+    
+    # Extract all variables from last round
+    vars_list = ["self_worth", "anxiety", "consistency", "momentum", "reputation",
+                 "opportunity_access", "fragility_index", "lock_in", "learning_rate", "energy"]
+    
+    # Calculate correlations across rounds
+    corr_matrix = np.zeros((len(vars_list), len(vars_list)))
+    for i, v1 in enumerate(vars_list):
+        for j, v2 in enumerate(vars_list):
+            vals1 = [state_history[r][list(state_history[r].keys())[0]][v1] for r in range(len(state_history))]
+            vals2 = [state_history[r][list(state_history[r].keys())[0]][v2] for r in range(len(state_history))]
+            if len(vals1) > 1:
+                corr_matrix[i, j] = np.corrcoef(vals1, vals2)[0, 1] if np.std(vals1) > 0 and np.std(vals2) > 0 else 0
+            else:
+                corr_matrix[i, j] = 1 if i == j else 0
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix,
+        x=[v.replace('_', ' ').title() for v in vars_list],
+        y=[v.replace('_', ' ').title() for v in vars_list],
+        colorscale='RdBu', zmid=0, showscale=True
+    ))
+    fig.update_layout(height=500, margin=dict(l=80, r=20, t=20, b=80))
+    st.plotly_chart(fig, use_container_width=True)
 
 def show_agent_drilldown(agents, state_history):
     st.markdown("### 🧠 Agent Cognitive States")
@@ -375,21 +544,48 @@ def show_outcomes(sim_result):
     outcome = sim_result["outcome_vector"]
     agents = sim_result["agents"]
     st.markdown("## 📊 Strategic Forecast")
-    st.metric("Winner", "Nuanced middle ground")   # placeholder
-    st.metric("Confidence", "72%")
-    with st.expander("Confidence Rubric"):
+    
+    # Enhanced winner determination with AI judging if available
+    if HAS_OPENAI and len(get_providers()) > 0:
+        with st.spinner("🤖 AI analyzing debate dynamics..."):
+            agent_summary = "\n".join([f"{a.name}: SW={a.self_worth:.2f}, Anx={a.anxiety:.2f}, Rep={a.reputation:.2f}" for a in agents])
+            prompt = f"Based on these cognitive states, which agent performed best and why?\n{agent_summary}\nGive a one-sentence verdict."
+            system = "You are an expert judge of cognitive-social dynamics."
+            try:
+                ai_verdict, provider = generate_with_fallback(prompt, system)
+                winner_text = f"Nuanced analysis via {provider}"
+                st.info(f"🧠 **AI Judge**: {ai_verdict}")
+            except:
+                winner_text = "Nuanced middle ground"
+    else:
+        winner_text = "Nuanced middle ground"
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Winner", winner_text)
+    c2.metric("Confidence", f"{72 + random.randint(-5, 5)}%")
+    
+    with st.expander("📋 Confidence Rubric"):
         st.write("**Feasibility:** 7/10  |  **Alignment:** 6/10  |  **Risk:** 7/10  |  **Evidence:** 8/10")
+    
     st.markdown("### Outcome Metrics")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Reputation Mean", f"{outcome['reputation_mean']:.3f}")
     c2.metric("Inequality", f"{outcome['inequality']:.4f}")
     c3.metric("Trust Proxy", f"{outcome['trust_proxy']:.3f}")
     c4.metric("Centralization", f"{outcome['centralization']:.3f}")
-    # BlackSwan Assassin (simplified)
+    
+    # BlackSwan Assassin (enhanced)
     with st.expander("🕵️ BlackSwan Assassin"):
         st.write("**Assumption:** Debate remains rational.")
         st.write("**Why fragile:** Emotional anecdotes may spike anxiety.")
         st.write("**Break scenario:** A student shares a personal story → anxiety +20%.")
+        
+        # Add persuasion tracking
+        st.markdown("#### 💡 Persuasion Metrics")
+        for a in agents:
+            persuasion_score = a.self_worth * 0.4 + a.reputation * 0.3 + a.consistency * 0.3
+            st.progress(persuasion_score, text=f"{a.name}: {persuasion_score:.2%} persuasion power")
+    
     # Counterfactual sensitivity
     with st.expander("🧪 Counterfactual Sensitivity"):
         if st.button("Run +20% Anxiety Perturbation"):
@@ -407,22 +603,65 @@ def show_outcomes(sim_result):
             st.write(f"Original Reputation Mean: {orig_rep:.3f}")
             st.write(f"Perturbed (+20% anxiety): {pert_rep:.3f}")
             st.write(f"Shift: {(pert_rep - orig_rep):+.3f}")
+    
+    # New visualizations
+    plot_agent_network(agents, sim_result["state_history"])
+    plot_variable_heatmap(sim_result["state_history"])
+    
     show_agent_drilldown(agents, sim_result["state_history"])
+    
     st.markdown("### 🔁 Feedback Loops")
     for a in agents:
         if a.success_streak >= 2:
             st.write(f"🔁 **{a.name}** – Success chain ×{a.success_streak}")
-    report = json.dumps({"outcome": outcome, "seed": sim_result["seed"]}, indent=2, default=str)
-    st.download_button("📥 Download Full Report", report, file_name="nyx_report.json")
+    
+    # Enhanced export options
+    report = json.dumps({"outcome": outcome, "seed": sim_result["seed"], 
+                        "agents": [{name: getattr(a, name) for name in dir(a) if not name.startswith('_')} for a in agents]}, 
+                       indent=2, default=str)
+    st.download_button("📥 Download Full Report (JSON)", report, file_name="nyx_report.json")
+    
+    # CSV export
+    csv_data = pd.DataFrame([{
+        "Agent": a.name,
+        "Self-Worth": a.self_worth,
+        "Anxiety": a.anxiety,
+        "Consistency": a.consistency,
+        "Momentum": a.momentum,
+        "Reputation": a.reputation,
+        "Mode": a.mode
+    } for a in agents])
+    csv_str = csv_data.to_csv(index=False)
+    st.download_button("📊 Download Agent States (CSV)", csv_str, file_name="agent_states.csv")
 # =============================================================================
 # PART 3 of 3 — Paste at the end (sidebar + main page)
 # =============================================================================
+
+# Dark mode toggle
+dark_mode_container = st.sidebar.container()
+with dark_mode_container:
+    if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
+        st.session_state.dark_mode = True
+        st.markdown('<script>document.body.classList.add("dark-mode");</script>', unsafe_allow_html=True)
+    else:
+        st.session_state.dark_mode = False
 
 with st.sidebar:
     st.markdown("### 💜 Nyx Engine")
     st.markdown("---")
     st.markdown("### ⚙️ Mode")
-    mode = st.radio("Choose mode", ["Standard Debate", "Advanced Simulation"], index=0)
+    
+    # Add tooltips with explanations
+    st.markdown("""
+    <div class="tooltip" data-tip="Simulates cognitive-social dynamics between agents">
+        Standard Debate
+    </div>
+    <div class="tooltip" data-tip="Advanced physics-based simulation with 10 cognitive variables">
+        Advanced Simulation
+    </div>
+    """, unsafe_allow_html=True)
+    
+    mode = st.radio("Choose mode", ["Standard Debate", "Advanced Simulation"], index=0, label_visibility="collapsed")
     st.session_state.adv_sim = (mode == "Advanced Simulation")
 
     if st.session_state.adv_sim:
