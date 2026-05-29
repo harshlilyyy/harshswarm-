@@ -352,7 +352,8 @@ Give a short, sharp argument (1-3 sentences)."""
         self.history.append(reply)
         return reply, provider
 
-def run_standard_debate(topic, agents_text, rounds, preferred_provider=None):
+def run_standard_debate(topic, agents_text, rounds, preferred_provider=None, seed=42):
+    rng = random.Random(seed)
     agents = []
     for line in agents_text.strip().split("\n"):
         parts = line.split(",", 1)
@@ -370,7 +371,7 @@ def run_standard_debate(topic, agents_text, rounds, preferred_provider=None):
             last_msg = msg
     # Simple winner heuristic: longest average argument length
     winner = max(agents, key=lambda a: sum(len(m) for m in a.history)/max(1,len(a.history))).name
-    return log, winner
+    return log, winner, seed
 
 # ---------- ADVANCED SIMULATION FUNCTIONS ----------
 def run_simulation(agent_names, rounds=4, seed=42):
@@ -680,19 +681,24 @@ with st.sidebar:
                     st.success("Simulation complete!")
     else:
         st.markdown("### 🗣️ Standard Debate")
-        topic = st.text_input("Topic", "Should smartphones be banned in schools?")
-        agents_input = st.text_area("Agents (one per line, format: Name, stance)", 
-                                    "Harsh, skeptic\nJayant, optimist\nAhany, moderator")
-        rounds_debate = st.slider("Rounds", 1, 6, 3)
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            topic = st.text_input("Topic", "Should smartphones be banned in schools?")
+            agents_input = st.text_area("Agents (one per line, format: Name, stance)", 
+                                        "Harsh, skeptic\nJayant, optimist\nAhany, moderator")
+        with col2:
+            rounds_debate = st.slider("Rounds", 1, 6, 3)
+            seed_debate = st.number_input("Seed", value=42, step=1, key="debate_seed")
         available_providers = get_providers()
         provider_names = ["Auto"] + [p["name"] for p in available_providers]
         preferred = st.selectbox("Preferred provider", provider_names, index=0)
         preferred = None if preferred == "Auto" else preferred
         if st.button("⚡ Start Debate"):
             with st.spinner("Debating with AI..."):
-                log, winner = run_standard_debate(topic, agents_input, rounds_debate, preferred)
+                log, winner, used_seed = run_standard_debate(topic, agents_input, rounds_debate, preferred, seed=seed_debate)
                 st.session_state.debate_log = log
                 st.session_state.debate_winner = winner
+                st.session_state.debate_seed = used_seed
                 st.success("Debate finished!")
 
 # ---------- MAIN PAGE ----------
@@ -710,6 +716,9 @@ if st.session_state.adv_sim:
 else:
     if st.session_state.debate_log:
         st.markdown("## Debate Transcript")
+        # Display seed info
+        if hasattr(st.session_state, 'debate_seed'):
+            st.info(f"🎲 Seed used: {st.session_state.debate_seed}")
         for line in st.session_state.debate_log:
             st.markdown(line)
         if st.session_state.debate_winner:

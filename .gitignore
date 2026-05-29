@@ -1,27 +1,154 @@
-```
-# Python
+# Dependencies
+.venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Dependencies
-venv/
-.venv/
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
 
-# Editors
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # Build artifacts
 dist/
 build/
+*.egg-info/
 target/
-```
+.gradle/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+
+# Distribution
+*.whl
+*.egg
+*.msi
+
+# Python specific
+*.so
+*.dylib
+*.dll
+
+# Compiled
+*.class
+*.jar
+*.war
+*.ear
+*.o
+*.a
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+
+# Documentation
+docs/_build/
+sphinx_build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ruby
+.bundle/
+Gemfile.lock
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# C/C++
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Rust
+target/
+
+# Julia
+julia-*/
+
+# Zig
+zig-out/
+zig-cache/
+
+# Maven
+target/
+
+# Gradle
+.gradle/
+build/
+
+# Bazel
+bazel-*/
