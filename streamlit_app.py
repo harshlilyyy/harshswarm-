@@ -546,6 +546,89 @@ def render_deep_dive_tab(sim_result):
         fig.update_layout(title="Per-Agent Variable Variance", xaxis_title="Agent", yaxis_title="Variable")
         st.plotly_chart(fig, use_container_width=True)
     
+    # Call continuation for Counterfactual and Multi-Trial sections
+    render_deep_dive_tab_continued(sim_result)
+
+
+def render_question_tab(sim_result):
+    """Render the Question/Debate tab."""
+    agents = sim_result["agents"]
+    state_history = sim_result["state_history"]
+    
+    st.markdown("### ❓ Question & Debate")
+    
+    st.markdown("**Pose a question to analyze based on simulation results**")
+    
+    # Question input
+    question = st.text_input("Enter your question", "What factors most influenced the outcome?")
+    
+    if st.button("💡 Analyze Question"):
+        available_providers = get_providers()
+        provider_names = ["Auto"] + [p["name"] for p in available_providers]
+        preferred = st.selectbox("Preferred provider", provider_names, index=0, key="question_provider")
+        preferred = None if preferred == "Auto" else preferred
+        
+        with st.spinner("Analyzing..."):
+            # Build context from simulation results
+            outcome = sim_result["outcome_vector"]
+            context = f"""Simulation Results:
+- Reputation Mean: {outcome['reputation_mean']:.3f}
+- Trust Proxy: {outcome['trust_proxy']:.3f}
+- Inequality: {outcome['inequality']:.4f}
+
+Final Agent States:
+"""
+            for agent in agents:
+                state = agent.get_current_state_dict()
+                context += f"- {agent.name}: self_worth={state['self_worth']:.2f}, anxiety={state['anxiety']:.2f}, mode={agent.mode}\n"
+            
+            prompt = f"Based on these simulation results:\n{context}\n\nAnswer this question: {question}"
+            system = "You are an expert analyst interpreting cognitive-social simulation results. Provide clear, actionable insights."
+            
+            answer, provider = generate_with_fallback(prompt, system, preferred)
+            
+            st.markdown(f"**Analysis** (via {provider}):")
+            st.info(answer)
+    
+    # Quick insights based on simulation
+    st.markdown("### 🔍 Quick Insights")
+    
+    outcome = sim_result["outcome_vector"]
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if outcome["reputation_mean"] > 0.6:
+            st.success("High overall reputation suggests healthy social dynamics")
+        elif outcome["reputation_mean"] < 0.4:
+            st.error("Low reputation indicates potential trust issues in the system")
+        else:
+            st.info("Moderate reputation levels - room for improvement")
+    
+    with col2:
+        if outcome["trust_proxy"] > 0.5:
+            st.success("Strong trust proxy indicates good alignment")
+        else:
+            st.warning("Low trust proxy suggests polarization risks")
+    
+    with col3:
+        if outcome["inequality"] < 0.1:
+            st.success("Low inequality - balanced opportunity distribution")
+        else:
+            st.error("High inequality detected - consider intervention strategies")
+    
+    # Mode-based recommendations
+    st.markdown("### 📋 Mode-Based Recommendations")
+    gt = game_theory_insights(agents)
+    for insight in gt["nash_analysis"]:
+        st.info(insight)
+
+
+def render_deep_dive_tab_continued(sim_result):
+    """Continuation of Deep Dive tab - Counterfactual and Multi-Trial."""
+    agents = sim_result["agents"]
+    state_history = sim_result["state_history"]
+    seed = sim_result["seed"]
+    
     # Counterfactual Panel
     st.markdown("### 🧪 Counterfactual Analysis")
     cf_col1, cf_col2 = st.columns([1, 2])
@@ -712,7 +795,7 @@ st.markdown('<p class="subtitle">Decision Intelligence Simulator · Powered by C
 if st.session_state.adv_sim:
     if st.session_state.sim_result:
         # Create tabs with glass styling
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🧠 Agents", "🌐 Network", "🔬 Deep Dive"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "🧠 Agents", "🌐 Network", "🔬 Deep Dive", "❓ Question"])
         
         with tab1:
             render_overview_tab(st.session_state.sim_result)
@@ -725,6 +808,9 @@ if st.session_state.adv_sim:
         
         with tab4:
             render_deep_dive_tab(st.session_state.sim_result)
+        
+        with tab5:
+            render_question_tab(st.session_state.sim_result)
     else:
         st.markdown("""
         <div class="glass-card" style="text-align: center; padding: 3rem;">
