@@ -1,0 +1,15 @@
+# MiroFish - Swarm Intelligence Prediction Engine
+# Core dependencies
+
+# No external dependencies required for core functionality
+# All modules use Python standard library only
+
+# Optional dependencies for extended functionality:
+# numpy>=1.20.0          # For advanced numerical operations
+# pandas>=1.3.0          # For data analysis
+# networkx>=2.6.0        # For graph analysis
+# scipy>=1.7.0           # For statistical distributions
+# nltk>=3.6.0            # For NLP entity extraction
+# PyPDF2>=2.0.0          # For PDF ingestion
+# beautifulsoup4>=4.9.0  # For web content parsing
+# requests>=2.25.0       # For web API access
