@@ -1,5 +1,8 @@
-streamlit
-openai
-numpy
-plotly
-google-generativeai
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.17.0
+networkx>=3.0
+matplotlib>=3.7.0
+openai>=1.0.0
+google-generativeai>=0.3.0
