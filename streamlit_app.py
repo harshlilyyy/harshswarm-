@@ -1219,18 +1219,19 @@ def render_deep_dive_tab_continued(sim_result):
 # =============================================================================
 with st.sidebar:
     st.markdown('<p class="nyx-title">Nyx</p>', unsafe_allow_html=True)
+    st.markdown("### ✨ Harsh Dubey · Nyx ✨")
     st.markdown("---")
     
     # Mode switch
-    st.markdown("### ⚙️ Mode")
-    mode = st.radio("Choose mode", ["Standard Debate", "Advanced Simulation"], index=0)
+    st.markdown("### ⚙️ Configuration")
+    mode = st.radio("Simulation Mode", ["Standard Debate", "Advanced Simulation"], index=0)
     st.session_state.adv_sim = (mode == "Advanced Simulation")
     
     if st.session_state.adv_sim:
-        st.markdown("### 🌌 Advanced Simulation")
+        st.markdown("### 🌌 Advanced Settings")
         
-        seed = st.number_input("Seed", value=42, step=1)
-        rounds = st.slider("Rounds", 5, 20, 10)
+        seed = st.number_input("PRNG Seed", value=42, step=1, help="Same seed = identical results")
+        rounds = st.slider("Simulation Rounds", 5, 20, 10)
         n_agents = st.slider("Number of Agents", 3, 12, 6)
         
         # Generate agent names
@@ -1248,8 +1249,63 @@ with st.sidebar:
                 st.success("✅ PASS: Identical outcomes with same seed")
             else:
                 st.error("❌ FAIL: Outcomes differ!")
+    else:
+        st.markdown("### 🗣️ Debate Settings")
+        agents_input = st.text_area("Agents (Name, stance)", "Harsh, skeptic\nJayant, optimist\nAhany, moderator")
+        rounds_debate = st.slider("Debate Rounds", 1, 6, 3)
         
-        if st.button("🚀 Run Simulation", type="primary"):
+        available_providers = get_providers()
+        provider_names = ["Auto"] + [p["name"] for p in available_providers]
+        preferred = st.selectbox("Preferred Provider", provider_names, index=0)
+        preferred = None if preferred == "Auto" else preferred
+
+
+# =============================================================================
+# MAIN PAGE - HERO INPUT & RESULTS
+# =============================================================================
+st.markdown('<p class="nyx-title">Nyx</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">The Decision Intelligence Simulator</p>', unsafe_allow_html=True)
+
+if st.session_state.adv_sim:
+    # ADVANCED SIMULATION MODE
+    if not st.session_state.sim_result:
+        # Show hero input form
+        st.markdown("""
+        <div class="glass-card" style="text-align: center; padding: 2rem; margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1.5rem;">🌌 Configure Your Agent Society</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Main question/decision input
+        decision_question = st.text_area(
+            "Decision Question",
+            placeholder="e.g., Should we ban smartphones in schools?",
+            height=100,
+            key="adv_decision_input"
+        )
+        
+        # Advanced options collapsible
+        with st.expander("⚙️ Advanced Options"):
+            adv_seed = st.number_input("PRNG Seed", value=42, step=1, key="main_seed")
+            adv_rounds = st.slider("Simulation Rounds", 5, 20, 10, key="main_rounds")
+            adv_agents = st.slider("Number of Agents", 3, 12, 6, key="main_n_agents")
+            adv_agent_names = st.text_area(
+                "Agents (one per line)", 
+                "Harsh\nJayant\nMira\nVera\nAtlas\nLuna", 
+                height=150,
+                key="main_agent_names"
+            )
+        
+        # Sync sidebar and main inputs
+        if "main_seed" in st.session_state:
+            seed = st.session_state.main_seed
+        if "main_rounds" in st.session_state:
+            rounds = st.session_state.main_rounds
+        if "main_agent_names" in st.session_state:
+            agent_names_input = st.session_state.main_agent_names
+        
+        # Run button
+        if st.button("🚀 Run Simulation", type="primary", use_container_width=True):
             agent_list = [name.strip() for name in agent_names_input.strip().split("\n") if name.strip()]
             if len(agent_list) < 2:
                 st.error("Need at least 2 agents.")
@@ -1257,50 +1313,45 @@ with st.sidebar:
                 with st.spinner("Running cognitive simulation..."):
                     progress_bar = st.progress(0)
                     for i in range(rounds):
-                        time.sleep(0.05)  # Visual feedback
+                        time.sleep(0.02)
                         progress_bar.progress((i + 1) / rounds)
                     result = run_simulation(agent_list, rounds=rounds, seed=seed)
                     st.session_state.sim_result = result
-                    st.success("Simulation complete!")
+                    st.session_state.decision_question = decision_question
+                    st.success("✅ Simulation complete!")
+                    st.rerun()
+    
     else:
-        st.markdown("### 🗣️ Standard Debate")
-        topic = st.text_input("Topic", "Should smartphones be banned in schools?")
-        agents_input = st.text_area("Agents (Name, stance)", "Harsh, skeptic\nJayant, optimist\nAhany, moderator")
-        rounds_debate = st.slider("Rounds", 1, 6, 3)
+        # Results Dashboard - show compact question bar at top
+        st.markdown("""
+        <div class="glass-card" style="padding: 1rem; margin-bottom: 1rem;">
+            <small style="opacity: 0.6;">DECISION QUESTION</small>
+        </div>
+        """, unsafe_allow_html=True)
         
-        available_providers = get_providers()
-        provider_names = ["Auto"] + [p["name"] for p in available_providers]
-        preferred = st.selectbox("Preferred provider", provider_names, index=0)
-        preferred = None if preferred == "Auto" else preferred
+        # Compact question display with option to run new simulation
+        col_q1, col_q2 = st.columns([4, 1])
+        with col_q1:
+            if st.session_state.get("decision_question"):
+                st.markdown(f"**{st.session_state.decision_question}**")
+            else:
+                st.markdown("**No specific question provided**")
+        with col_q2:
+            if st.button("🔄 New Simulation", use_container_width=True):
+                st.session_state.sim_result = None
+                st.session_state.decision_question = None
+                st.rerun()
         
-        if st.button("⚡ Start Debate"):
-            with st.spinner("Debating with AI..."):
-                log, winner = run_standard_debate(topic, agents_input, rounds_debate, preferred)
-                st.session_state.debate_log = log
-                st.session_state.debate_winner = winner
-                st.success("Debate finished!")
-
-
-# =============================================================================
-# MAIN PAGE
-# =============================================================================
-st.markdown('<p class="nyx-title">Nyx</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">Decision Intelligence Simulator · Powered by Cognitive-Social Physics</p>', unsafe_allow_html=True)
-
-if st.session_state.adv_sim:
-    if st.session_state.sim_result:
-        # Create tabs with glass styling - now with 10 comprehensive tabs
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+        st.markdown("---")
+        
+        # Create tabs with glass styling
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📊 Overview", 
             "🧠 Agents", 
             "🌐 Network", 
             "🔬 Deep Dive", 
             "❓ Question",
-            "📤 Export",
-            "🔮 Compare",
-            "🤖 Customize",
-            "📜 History",
-            "📊 Analytics"
+            "📤 Export"
         ])
         
         with tab1:
@@ -1320,46 +1371,65 @@ if st.session_state.adv_sim:
         
         with tab6:
             render_export_tab(st.session_state.sim_result)
-        
-        with tab7:
-            render_comparison_tab()
-        
-        with tab8:
-            render_agent_customization_tab()
-        
-        with tab9:
-            render_history_tab()
-        
-        with tab10:
-            render_advanced_analytics_tab()
-    else:
+
+else:
+    # STANDARD DEBATE MODE
+    # Hero input for debate topic
+    if not st.session_state.debate_log:
         st.markdown("""
-        <div class="glass-card" style="text-align: center; padding: 3rem;">
-            <h3>🌌 Advanced Simulation Ready</h3>
-            <p style="opacity: 0.7; margin: 1rem 0;">
-                Configure your agent society in the sidebar and click <strong>Run Simulation</strong> 
-                to explore cognitive-social dynamics.
-            </p>
-            <p style="font-size: 0.9rem; opacity: 0.5;">
-                Same seed → identical results. Deterministic by design.
-            </p>
+        <div class="glass-card" style="text-align: center; padding: 2rem; margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1.5rem;">🗣️ Start a Debate</h3>
         </div>
         """, unsafe_allow_html=True)
-else:
-    if st.session_state.debate_log:
+        
+        # Main topic input - centered like Perplexity
+        debate_topic = st.text_area(
+            "Debate Topic",
+            placeholder="e.g., Should smartphones be banned in schools?",
+            height=100,
+            key="debate_topic_input"
+        )
+        
+        # Use agents from sidebar
+        if "agents_input" not in locals():
+            agents_input = "Harsh, skeptic\nJayant, optimist\nAhany, moderator"
+        if "rounds_debate" not in locals():
+            rounds_debate = 3
+        if "preferred" not in locals():
+            preferred = None
+        
+        if st.button("⚡ Start Debate", type="primary", use_container_width=True):
+            if not debate_topic.strip():
+                st.error("Please enter a debate topic.")
+            else:
+                with st.spinner("Debating with AI..."):
+                    log, winner = run_standard_debate(debate_topic, agents_input, rounds_debate, preferred)
+                    st.session_state.debate_log = log
+                    st.session_state.debate_winner = winner
+                    st.session_state.debate_topic = debate_topic
+                    st.success("Debate finished!")
+                    st.rerun()
+    
+    else:
+        # Show debate results
+        # Compact topic bar
+        col_d1, col_d2 = st.columns([4, 1])
+        with col_d1:
+            if st.session_state.get("debate_topic"):
+                st.markdown(f"**Topic:** {st.session_state.debate_topic}")
+        with col_d2:
+            if st.button("🔄 New Debate", use_container_width=True):
+                st.session_state.debate_log = []
+                st.session_state.debate_winner = ""
+                st.session_state.debate_topic = ""
+                st.rerun()
+        
+        st.markdown("---")
+        
         st.markdown("## 🗣️ Debate Transcript")
         for line in st.session_state.debate_log:
             st.markdown(line)
         if st.session_state.debate_winner:
-            st.success(f"**🏆 Winner:** {st.session_state.debate_winner}")
-    else:
-        st.markdown("""
-        <div class="glass-card" style="text-align: center; padding: 3rem;">
-            <h3>🗣️ Standard Debate Mode</h3>
-            <p style="opacity: 0.7; margin: 1rem 0;">
-                Enter a topic and agent stances in the sidebar, then click <strong>Start Debate</strong>.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+            st.success(f"**🏆 Most Active Debater:** {st.session_state.debate_winner}")
 
 st.markdown("<div style='text-align: center; opacity: 0.5; margin-top: 3rem;'>✨ Nyx · Decision Intelligence Simulator ✨</div>", unsafe_allow_html=True)
