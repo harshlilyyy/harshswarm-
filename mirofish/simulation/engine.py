@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any, Callable, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..core.seeded_random import SeededRandom
 from ..world.world_model import WorldModel, WorldEntity, EntityType
@@ -405,7 +408,7 @@ class SimulationEngine:
         })
         
         if self.config.verbose:
-            print(f"Checkpoint saved at {checkpoint.timestamp}")
+            logger.info(f"Checkpoint saved at {checkpoint.timestamp}")
     
     def _collect_metrics(self):
         """Collect simulation metrics."""

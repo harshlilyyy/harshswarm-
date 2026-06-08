@@ -6,8 +6,16 @@ import streamlit as st
 import time
 import json
 import math
+import logging
 from datetime import datetime
 import pandas as pd
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Import the deterministic kernel
 from nyx_kernel import (
@@ -185,8 +193,11 @@ def get_providers():
     available = []
     for p in all_providers:
         key = st.secrets.get(p["key_name"]) if hasattr(st, 'secrets') else None
-        if key:
-            available.append({**p, "key": key})
+        # Validate API key format (basic check)
+        if key and isinstance(key, str) and len(key.strip()) > 10:
+            available.append({**p, "key": key.strip()})
+        elif key:
+            logger.warning(f"Invalid API key format for {p['name']}")
     return available
 
 
@@ -196,6 +207,7 @@ def get_providers():
 def generate_with_fallback(prompt, system="", preferred=None):
     providers = get_providers()
     if not providers:
+        logger.error("No API keys configured")
         return "No API keys configured. Add them in Streamlit secrets.", "None"
     if preferred:
         providers = [p for p in providers if p["name"] == preferred] + [p for p in providers if p["name"] != preferred]
@@ -220,9 +232,11 @@ def generate_with_fallback(prompt, system="", preferred=None):
                 messages.append({"role": "user", "content": prompt})
                 resp = client.chat.completions.create(model=p["model"], messages=messages, temperature=0.7, max_tokens=200)
                 return resp.choices[0].message.content.strip(), p["name"]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Provider {p['name']} failed: {type(e).__name__}")
             time.sleep(0.5)
             continue
+    logger.error("All providers temporarily unavailable")
     return "All providers temporarily unavailable.", "None"
 
 

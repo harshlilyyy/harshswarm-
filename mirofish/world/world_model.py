@@ -478,11 +478,11 @@ class WorldModel:
             active_events=[e.copy() for e in self.active_events]
         )
         
-        # Calculate simple checksum
+        # Calculate simple checksum using SHA-256
         import hashlib
         state_dict = state.to_dict()
-        checksum_data = str(sorted(state_dict.keys()))
-        state.checksum = hashlib.md5(checksum_data.encode()).hexdigest()[:12]
+        checksum_data = str(sorted(state_dict.items()))
+        state.checksum = hashlib.sha256(checksum_data.encode()).hexdigest()[:12]
         
         self.state_history.append(state)
         return state

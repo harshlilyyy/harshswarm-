@@ -321,9 +321,17 @@ class CSVParser(BaseParser):
         
         if isinstance(source, (str, Path)) and Path(source).exists():
             path = Path(source)
-            source_id = str(path.absolute())
+            # Validate path to prevent path traversal attacks
+            try:
+                resolved_path = path.resolve()
+                # Ensure the path is within expected directories (optional security measure)
+                # For now, just ensure it's an absolute path after resolution
+                source_id = str(resolved_path)
+            except (OSError, ValueError) as e:
+                logger.error(f"Invalid path: {e}")
+                raise ValueError(f"Invalid file path: {source}")
             source_type = "csv_file"
-            file_obj = open(path, 'r', encoding='utf-8')
+            file_obj = open(resolved_path, 'r', encoding='utf-8')
             should_close = True
         else:
             source_id = hashlib.sha256(str(source).encode()).hexdigest()[:16]
