@@ -315,7 +315,24 @@ class LLMBasedExtractor(BaseExtractor):
             )
             
             import json
-            result_data = json.loads(response.choices[0].message.content)
+            # Validate JSON response schema before parsing
+            raw_content = response.choices[0].message.content
+            try:
+                result_data = json.loads(raw_content)
+                # Basic schema validation
+                if not isinstance(result_data, dict):
+                    raise ValueError("Response must be a JSON object")
+                required_keys = ["entities", "relationships"]
+                for key in required_keys:
+                    if key not in result_data:
+                        logger.warning(f"Missing required key '{key}' in LLM response")
+                        result_data[key] = []
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from LLM: {e}")
+                if self.fallback_extractor:
+                    return self.fallback_extractor.extract(chunk)
+                raise
+            
             return self._parse_llm_response(result_data, chunk.citation)
             
         except Exception as e:

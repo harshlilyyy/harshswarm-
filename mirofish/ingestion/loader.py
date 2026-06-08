@@ -109,5 +109,5 @@ class DocumentLoader:
         return entities
     
     def _generate_id(self, content: str) -> str:
-        """Generate unique ID from content hash."""
-        return hashlib.md5(content.encode()).hexdigest()[:16]
+        """Generate unique ID from content hash using SHA-256."""
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
