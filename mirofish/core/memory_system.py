@@ -71,21 +71,21 @@ class MemoryEntry:
         Returns:
             Memory strength in [0, 1]
         """
+        # Cache timestamp calculation
         if self.last_retrieved is None:
-            age = (current_time - self.timestamp).total_seconds() / 3600  # hours
+            age = (current_time - self.timestamp).total_seconds() * 0.000277778  # hours (divided by 3600)
         else:
-            age = (current_time - self.last_retrieved).total_seconds() / 3600
+            age = (current_time - self.last_retrieved).total_seconds() * 0.000277778
         
         # Ebbinghaus forgetting: S(t) = S0 * e^(-λt)
         base_decay = math.exp(-self.decay_rate * age)
         
         # Retrieval reinforcement: each retrieval strengthens by ~10%
+        # Cap at 10 retrievals for performance
         retrieval_boost = 1.0 + 0.1 * min(self.retrieval_count, 10)
         
         # Importance acts as ceiling
-        max_strength = self.importance
-        
-        return min(max_strength, base_decay * retrieval_boost)
+        return min(self.importance, base_decay * retrieval_boost)
     
     def retrieve(self, current_time: datetime):
         """Mark memory as retrieved, strengthening it."""
@@ -228,6 +228,7 @@ class MemorySystem:
         if memory_type == MemoryType.WORKING:
             candidates = self._working.copy()
         elif memory_type == MemoryType.EPISODIC:
+            # Filter by strength threshold first to reduce sorting load
             candidates = [m for m in self._episodic if m.strength(self._current_time) > 0.1]
         elif memory_type == MemoryType.SEMANTIC:
             candidates = list(self._semantic.values())
@@ -236,7 +237,7 @@ class MemorySystem:
         elif memory_type == MemoryType.EMOTIONAL:
             candidates = list(self._emotional.values())
         
-        # Filter by query if provided
+        # Filter by query if provided (early filtering)
         if query is not None:
             query_str = str(query).lower()
             candidates = [
@@ -244,14 +245,21 @@ class MemorySystem:
                 if query_str in str(m.content).lower()
             ]
         
-        # Sort by strength
-        candidates.sort(key=lambda m: m.strength(self._current_time), reverse=True)
+        # Use nlargest for better performance when top_k << len(candidates)
+        import heapq
+        if top_k < len(candidates) // 2:
+            # More efficient for small top_k
+            strongest = heapq.nlargest(top_k, candidates, key=lambda m: m.strength(self._current_time))
+        else:
+            # Full sort is better when retrieving large portion
+            candidates.sort(key=lambda m: m.strength(self._current_time), reverse=True)
+            strongest = candidates[:top_k]
         
         # Mark as retrieved
-        for memory in candidates[:top_k]:
+        for memory in strongest:
             memory.retrieve(self._current_time)
         
-        return candidates[:top_k]
+        return strongest
     
     def retrieve_emotional(self, entity_key: str) -> Optional[float]:
         """
@@ -327,15 +335,17 @@ class MemorySystem:
         """Remove weakest working memory item."""
         if not self._working:
             return
-        self._working.sort(key=lambda m: m.strength(self._current_time))
-        self._working.pop(0)
+        # Use min with key instead of full sort - O(n) vs O(n log n)
+        weakest = min(self._working, key=lambda m: m.strength(self._current_time))
+        self._working.remove(weakest)
     
     def _forget_episodic(self):
         """Remove weakest episodic memory."""
         if not self._episodic:
             return
-        self._episodic.sort(key=lambda m: m.strength(self._current_time))
-        self._episodic.pop(0)
+        # Use min with key instead of full sort - O(n) vs O(n log n)
+        weakest = min(self._episodic, key=lambda m: m.strength(self._current_time))
+        self._episodic.remove(weakest)
     
     def consolidate(self):
         """

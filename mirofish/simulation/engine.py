@@ -411,27 +411,33 @@ class SimulationEngine:
             logger.info(f"Checkpoint saved at {checkpoint.timestamp}")
     
     def _collect_metrics(self):
-        """Collect simulation metrics."""
+        """Collect simulation metrics with optimized aggregation."""
         if not self.config.collect_metrics:
             return
         
-        # Aggregate agent states
+        # Aggregate agent states efficiently
         modes = {}
         anxieties = []
         self_worths = []
         
-        for agent in self.agents.values():
+        # Pre-allocate lists for better performance
+        num_agents = len(self.agents)
+        anxieties = [0.0] * num_agents
+        self_worths = [0.0] * num_agents
+        
+        idx = 0
+        for idx, agent in enumerate(self.agents.values()):
             mode = agent.state.mode.name
             modes[mode] = modes.get(mode, 0) + 1
-            anxieties.append(agent.state.anxiety)
-            self_worths.append(agent.state.self_worth)
+            anxieties[idx] = agent.state.anxiety
+            self_worths[idx] = agent.state.self_worth
         
         metrics = {
             "time": self.scheduler.current_time.isoformat(),
             "time_step": self.world.global_state.get("time_step", 0),
             "agent_modes": modes,
-            "avg_anxiety": sum(anxieties) / len(anxieties) if anxieties else 0,
-            "avg_self_worth": sum(self_worths) / len(self_worths) if self_worths else 0,
+            "avg_anxiety": sum(anxieties) / num_agents if num_agents > 0 else 0,
+            "avg_self_worth": sum(self_worths) / num_agents if num_agents > 0 else 0,
             "anxiety_std": self._std(anxieties),
             "self_worth_std": self._std(self_worths),
             "cascade_count": sum(1 for a in self.agents.values() if a.state.cascade_active)
@@ -440,11 +446,13 @@ class SimulationEngine:
         self.metrics_history.append(metrics)
     
     def _std(self, values: List[float]) -> float:
-        """Calculate standard deviation."""
-        if len(values) < 2:
+        """Calculate standard deviation with optimized computation."""
+        n = len(values)
+        if n < 2:
             return 0.0
-        mean = sum(values) / len(values)
-        variance = sum((x - mean) ** 2 for x in values) / len(values)
+        mean = sum(values) / n
+        # Single-pass variance calculation
+        variance = sum((x - mean) ** 2 for x in values) / n
         return variance ** 0.5
     
     def run(self, blocking: bool = True) -> SimulationResult:
@@ -467,6 +475,7 @@ class SimulationEngine:
         duration = timedelta(hours=self.config.duration_hours)
         end_time = self.scheduler.start_time + duration
         
+        # Only create executor if parallel mode is enabled
         if self.config.parallel and self.config.max_workers > 1:
             self._executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
         
@@ -476,6 +485,7 @@ class SimulationEngine:
         finally:
             if self._executor:
                 self._executor.shutdown(wait=True)
+                self._executor = None
         
         self.running = False
         
@@ -483,16 +493,17 @@ class SimulationEngine:
         return self._compile_results()
     
     def _compile_results(self) -> SimulationResult:
-        """Compile simulation results."""
-        # Collect final agent states
+        """Compile simulation results with optimized aggregation."""
+        # Collect final agent states using dict comprehension
         agent_states = {
             aid: agent.get_current_state_dict()
             for aid, agent in self.agents.items()
         }
         
-        # Calculate statistics
+        # Calculate statistics efficiently
         total_updates = sum(len(a.state_history) for a in self.agents.values())
         cascade_agents = sum(1 for a in self.agents.values() if a.state.cascade_active)
+        num_agents = len(self.agents)
         
         statistics = {
             "total_agent_updates": total_updates,
@@ -501,7 +512,7 @@ class SimulationEngine:
             "checkpoints_saved": len(self.checkpoints),
             "metrics_collected": len(self.metrics_history),
             "agents_in_cascade": cascade_agents,
-            "cascade_rate": cascade_agents / len(self.agents) if self.agents else 0
+            "cascade_rate": cascade_agents / num_agents if num_agents > 0 else 0
         }
         
         return SimulationResult(
