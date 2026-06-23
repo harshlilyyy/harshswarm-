@@ -1,34 +1,24 @@
 ```
 # Dependencies
 node_modules/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.venv/
-venv/
+.pnpm-store/
+.npm/
+.yarn/
+
+# Build outputs
+dist/
+build/
+.next/
+.nuxt/
+public/dist/
+frontend/dist/
+backend/dist/
+
+# Environment variables
 .env
 .env.local
 .env.*
-
-# Build artifacts
-dist/
-build/
-target/
-
-# Logs
-*.log
-
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
+!.env.example
 
 # Python
 __pycache__/
@@ -36,30 +26,64 @@ __pycache__/
 *$py.class
 *.so
 .Python
-install_manifest.txt
-*.egg-info/
-.eggs/
-.coverage
-htmlcov/
-.coverage.*
-.cache
-.pytest_cache/
-.mypy_cache/
+venv/
+.venv/
+.env/lib/python*/site-packages/
 
-# Node.js
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-node_modules/
-jspm_packages/
 
-# Next.js
-.next/
-out/
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.directory
+.Trashes
+*.nib
+*~
+.DS_Store?
 
-# Coverage directory used by tools like istanbul
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Coverage
 coverage/
+htmlcov/
+.coverage
+*.cover
+.hypothesis/
 
-# TypeScript
-*.tsbuildinfo
+# Testing
+.pytest_cache/
+.mypy_cache/
+.tox/
+nosetests.xml
+coverage.xml
+
+# Runtime
+runtime/
+sessions/
+*.db
+*.sqlite
+*.sqlite3
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.rar
+*.7z
+*.bz2
+*.xz
+*.zst
 ```

@@ -6,6 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
@@ -241,7 +242,12 @@ export function useSimulationWebSocket(simulationId: string | null) {
   useEffect(() => {
     if (!simulationId) return;
 
-    const ws = new WebSocket(`ws://${BACKEND_URL.replace('http://', '')}/ws/simulation/${simulationId}`);
+    // Convert HTTP URL to WebSocket URL
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.host;
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/simulation/${simulationId}`;
+
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       setIsConnected(true);

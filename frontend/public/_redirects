@@ -1,1 +1,3 @@
+# SPA Routing for Vercel/Netlify
+# Redirect all non-file requests to index.html
 /*    /index.html   200

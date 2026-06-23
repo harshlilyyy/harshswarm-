@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://nyx-backend-render-app.onrender.com/api/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "wss://nyx-backend-render-app.onrender.com/ws/:path*"
     }
   ],
   "redirects": [
@@ -11,8 +15,34 @@
       "has": [
         {
           "type": "header",
-          "key": "host",
-          "value": "nyx-frontend.vercel.app"
+          "key": "accept",
+          "value": "text/html"
+        }
+      ],
+      "missing": [
+        {
+          "type": "extension",
+          "extension": "html"
+        },
+        {
+          "type": "extension",
+          "extension": "css"
+        },
+        {
+          "type": "extension",
+          "extension": "js"
+        },
+        {
+          "type": "extension",
+          "extension": "png"
+        },
+        {
+          "type": "extension",
+          "extension": "jpg"
+        },
+        {
+          "type": "extension",
+          "extension": "svg"
         }
       ],
       "destination": "/index.html"
