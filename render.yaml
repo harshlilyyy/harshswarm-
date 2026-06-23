@@ -1,0 +1,41 @@
+# NYX Backend - Render Configuration
+# Deploy to: https://render.com
+
+services:
+  - type: web
+    name: nyx-backend
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SAMBA_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: HF_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: VECTOR_DB_URL
+        sync: false
+      - key: VECTOR_DB_API_KEY
+        sync: false
+    healthCheckPath: /health
+    disk:
+      type: persistent
+      mountPath: /app/data
+      sizeGB: 1

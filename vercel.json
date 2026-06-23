@@ -1,0 +1,21 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://nyx-backend-render-app.onrender.com/api/:path*"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "nyx-frontend.vercel.app"
+        }
+      ],
+      "destination": "/index.html"
+    }
+  ]
+}

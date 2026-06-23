@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-light: #F5F0FF;
+  --card-bg: rgba(255, 255, 255, 0.55);
+  --border-glow: rgba(180, 130, 255, 0.4);
+  --purple-prime: #9B4DFF;
+  --pink-hot: #FF4D6D;
+  --red-accent: #E63946;
+  --text-dark: #2C2A28;
+  --glass-border: rgba(255, 255, 255, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-light);
+  color: var(--text-dark);
+}
+
+body {
+  background: radial-gradient(circle at 30% 20%, rgba(180, 130, 255, 0.15) 0%, var(--bg-light) 80%);
+  min-height: 100vh;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 28px;
+  padding: 1.5rem;
+  border: 0.5px solid var(--glass-border);
+  box-shadow: 0 10px 30px -10px rgba(155, 77, 255, 0.08);
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--pink-hot) 0%, var(--purple-prime) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Mode Badges */
+.mode-badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mode-EXECUTE { background: #d4edda; color: #155724; }
+.mode-OPTIMIZE { background: #fff3cd; color: #856404; }
+.mode-AVOID { background: #f8d7da; color: #721c24; }
+.mode-RECOVER { background: #d1ecf1; color: #0c5460; }
+.mode-SPIKE { background: #e2d5f1; color: #4a2c6e; }
+
+/* Button Styles */
+.btn-primary {
+  background: linear-gradient(135deg, var(--purple-prime) 0%, var(--pink-hot) 100%);
+  border: none;
+  border-radius: 60px;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 8px 20px -6px rgba(255, 77, 109, 0.35);
+  padding: 0.8rem 1.5rem;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  transform: scale(1.02);
+  box-shadow: 0 12px 24px -6px rgba(255, 77, 109, 0.5);
+}
+
+/* Input Styles */
+.input-glass {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(15px);
+  border: 0.5px solid var(--border-glow);
+  border-radius: 60px;
+  padding: 1rem 1.5rem;
+  font-size: 1.1rem;
+  color: var(--text-dark);
+  text-align: center;
+}
+
+.input-glass:focus {
+  outline: none;
+  border-color: var(--purple-prime);
+  box-shadow: 0 0 0 2px rgba(155, 77, 255, 0.2);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--purple-prime);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pink-hot);
+}
