@@ -142,10 +142,6 @@ class DatabaseRetriever:
             if self._sql_engine is None:
                 self._sql_engine = create_engine(self.sql_url)
             
-            # Simple keyword search across all tables
-            # In production, this would be more sophisticated
-            keywords = query.lower().split()
-            
             results = []
             with self._sql_engine.connect() as conn:
                 # Query simulation history table if exists
@@ -238,7 +234,6 @@ class DatabaseRetriever:
         """Search Qdrant vector database."""
         try:
             from qdrant_client import QdrantClient
-            from qdrant_client.http import models
             
             if self._vector_client is None:
                 self._vector_client = QdrantClient(
