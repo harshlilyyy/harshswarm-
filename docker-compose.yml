@@ -1,0 +1,103 @@
+# Docker Compose for local development
+# Provides complete stack: backend, database, redis, frontend
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Backend Service (FastAPI)
+  # =============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: nyx-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://nyx:nyxpassword@db:5432/nyx
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENVIRONMENT=development
+      - DEBUG=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+    volumes:
+      - ./backend/app:/app/app
+      - ./tests:/app/tests
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: nyx-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=nyx
+      - POSTGRES_PASSWORD=nyxpassword
+      - POSTGRES_DB=nyx
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nyx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Redis Cache
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: nyx-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Frontend Service (Next.js) - Optional for backend-only dev
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: nyx-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: nyx-network

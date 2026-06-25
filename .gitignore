@@ -1,89 +1,36 @@
 ```
 # Dependencies
-node_modules/
-.pnpm-store/
-.npm/
-.yarn/
-
-# Build outputs
-dist/
-build/
-.next/
-.nuxt/
-public/dist/
-frontend/dist/
-backend/dist/
-
-# Environment variables
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+.venv/
 .env
 .env.local
 .env.*
-!.env.example
+.envrc
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-.venv/
-.env/lib/python*/site-packages/
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+coverage/
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # OS generated files
 .DS_Store
 Thumbs.db
-ehthumbs.db
-Icon?
-.directory
-.Trashes
-*.nib
-*~
-.DS_Store?
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-*.cover
-.hypothesis/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-.tox/
-nosetests.xml
-coverage.xml
-
-# Runtime
-runtime/
-sessions/
-*.db
-*.sqlite
-*.sqlite3
-
-# Compressed files
-*.zip
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.gz
-*.rar
-*.7z
-*.bz2
-*.xz
-*.zst
+# Docker
+.dockerenv
 ```
